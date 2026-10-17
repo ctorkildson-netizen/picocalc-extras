@@ -1,0 +1,3 @@
+[submodule "settime/modules/picocalc-text-starter"]
+	path = settime/modules/picocalc-text-starter
+	url = https://github.com/BlairLeduc/picocalc-text-starter.git
