@@ -13,8 +13,10 @@ They came out of porting Empire, Colossal Cave Adventure and VirtualT
 | [`picocalc_clock.h`](picocalc_clock.h) | One header: read or set a time of day that survives switching programs |
 | [`settime/`](settime/) | A small program that sets that clock from NTP over WiFi, then returns to the shell |
 | [`screenshot/`](screenshot/) | Shift+F5 screenshots (BMP) for PDCurses programs on the PicoCalc |
+| [`nes/`](nes/) | A ready-made build of the ShapoNES NES emulator for the PicoCalc |
 
-Everything here is MIT-licensed (see [LICENSE](LICENSE)).
+Everything here is MIT-licensed (see [LICENSE](LICENSE)), except the build in
+`nes/`, which is Shapoco's ShapoNES, shared with his permission.
 
 ## The shared clock
 
