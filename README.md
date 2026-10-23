@@ -2,11 +2,12 @@
 
 Small pieces for programs on the ClockworkPi **PicoCalc** with an RP2350
 (Pico 2 / Pico 2 W) and UF2 Loader: a clock that every program can share,
-a program that sets it from the internet, and Shift+F5 screenshots for
-PDCurses programs.
+a program that sets it from the internet, Shift+F5 screenshots for
+PDCurses programs, a file picker, and JPEG/PNG/BMP decoders.
 
 They came out of porting Empire, Colossal Cave Adventure and VirtualT
-(a TRS-80 Model 100 emulator) to the PicoCalc.
+(a TRS-80 Model 100 emulator) to the PicoCalc, and of writing its
+[picture viewer](https://github.com/ctorkildson-netizen/picocalc-viewer).
 
 | Piece | What it is |
 |---|---|
@@ -14,9 +15,14 @@ They came out of porting Empire, Colossal Cave Adventure and VirtualT
 | [`settime/`](settime/) | A small program that sets that clock from NTP over WiFi, then returns to the shell |
 | [`screenshot/`](screenshot/) | Shift+F5 screenshots (BMP) for PDCurses programs on the PicoCalc |
 | [`nes/`](nes/) | A ready-made build of the ShapoNES NES emulator for the PicoCalc |
+| [`picker/`](picker/) | A file picker: lists a folder, moves around the card, returns the file chosen, with an optional banner and preview panel |
+| [`images/`](images/) | JPEG, PNG and BMP decoders that fit a picture to a frame, plus a PC harness for testing them |
+| [`HOWTO.md`](HOWTO.md) | How to use the picker and the decoders in your own program, with an example |
 
 Everything here is MIT-licensed (see [LICENSE](LICENSE)), except the build in
-`nes/`, which is Shapoco's ShapoNES, shared with his permission.
+`nes/`, which is Shapoco's ShapoNES, shared with his permission, and the
+JPEG and PNG decoders that `images/` uses, which keep their own licences
+(see [its README](images/README.md#whose-code)).
 
 ## The shared clock
 
@@ -82,6 +88,15 @@ directory with the Pico SDK 2.x (including its `lib/cyw43-driver` and
 
 [`screenshot/`](screenshot/) adds Shift+F5 screenshots to PDCurses
 programs built on the PicoCalc backend. See its [README](screenshot/README.md).
+
+## The picker and the decoders
+
+**[HOWTO.md](HOWTO.md)** walks through using them in your own program, with
+a small working example in [`examples/showpic`](examples/showpic/) that
+lists the pictures on the card and shows the one you pick. The details are in
+[picker/README.md](picker/README.md) and [images/README.md](images/README.md).
+Both build into a Pico SDK program with one `include()` in its CMakeLists.txt.
+The decoders need `git submodule update --init` first, for PNGdec.
 
 ## Status
 
