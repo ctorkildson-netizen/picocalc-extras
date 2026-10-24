@@ -1,9 +1,9 @@
 # picocalc-extras
 
 Small pieces for programs on the ClockworkPi **PicoCalc** with an RP2350
-(Pico 2 / Pico 2 W) and UF2 Loader: a clock that every program can share,
-a program that sets it from the internet, Shift+F5 screenshots for
-PDCurses programs, a file picker, and JPEG/PNG/BMP decoders.
+(Pico 2 / Pico 2 W) and UF2 Loader: Shift+F5 screenshots for PDCurses
+programs, a file picker, JPEG/PNG/BMP decoders, and a header for the
+shell's clock.
 
 They came out of porting Empire, Colossal Cave Adventure and VirtualT
 (a TRS-80 Model 100 emulator) to the PicoCalc, and of writing its
@@ -11,8 +11,7 @@ They came out of porting Empire, Colossal Cave Adventure and VirtualT
 
 | Piece | What it is |
 |---|---|
-| [`picocalc_clock.h`](picocalc_clock.h) | One header: read or set a time of day that survives switching programs |
-| [`settime/`](settime/) | A small program that sets that clock from NTP over WiFi, then returns to the shell |
+| [`picocalc_clock.h`](picocalc_clock.h) | The shell's clock (shell v1.1), for programs written for the earlier shared clock here |
 | [`screenshot/`](screenshot/) | Shift+F5 screenshots (BMP) for PDCurses programs on the PicoCalc |
 | [`nes/`](nes/) | A ready-made build of the ShapoNES NES emulator for the PicoCalc |
 | [`picker/`](picker/) | A file picker: lists a folder, moves around the card, returns the file chosen, with an optional banner and preview panel |
@@ -26,63 +25,45 @@ JPEG and PNG decoders that `images/` uses, which keep their own licences
 
 ## The shared clock
 
-The PicoCalc has no battery-backed clock. But the RP2350's always-on
-(POWMAN) timer runs from the crystal and **keeps running through the soft
-reboot UF2 Loader does when it switches from one program to the next**. Only
-switching the power off clears it.
+The shared clock has moved into Blair Leduc's
+[PicoCalc shell](https://github.com/BlairLeduc/picocalc-shell): from
+[v1.1](https://github.com/BlairLeduc/picocalc-shell/releases/tag/v1.1) the
+shell keeps the time in the RP2350's always-on timer, which runs through
+the reboot into each program, along with a record that says whether the
+time is set and what the local time zone is. It also keeps the time in a
+DS3231 when the PicoCalc has one, so it survives power-off, and on a
+Pico 2 W can set it from the internet with `ntp`. Set the time with the
+shell's `date` and `time` commands.
 
-So one program can set the time once after power-on, and every program
-started after it can read it. That was tested on a Pico 2 W: the time was
-set over NTP, then the PicoCalc went to the shell, into Adventure, back to
-the shell and into VirtualT, which found the time still there.
+New programs should read it with `picocalc_shell_time()` from the shell's
+`include/picocalc_shell.h` (linking `hardware_powman`):
 
 ```c
-#include "picocalc_clock.h"
+#include "picocalc_shell.h"
 
-/* at startup: set this program's time()/localtime() from the shared clock */
-if (picocalc_clock_load()) {
-    /* the real time is known */
+int64_t utc_ms;
+int offset_min;
+if (picocalc_shell_time(&utc_ms, &offset_min)) {
+    time_t local = utc_ms / 1000 + offset_min * 60;
+    /* ... */
 }
-
-/* after learning the time some other way (NTP, the user typing it): */
-picocalc_clock_save();
 ```
 
-`picocalc_clock_is_set()` says whether the shared clock holds a real time
-without changing anything. The clock holds UTC; set the `TZ` environment
-variable (a POSIX TZ string) to get local time from `localtime()`.
+[`picocalc_clock.h`](picocalc_clock.h) is kept for programs written for
+this repository's earlier clock: the same `picocalc_clock_load()`,
+`picocalc_clock_save()` and `picocalc_clock_is_set()`, now on top of the
+shell's clock (and `picocalc_clock_load()` sets `TZ` from the shell's time
+zone too). It needs shell v1.1's `picocalc_shell.h` on the include path and
+`hardware_powman` linked.
 
-The convention that makes it trustworthy: **only real times go in** (from
-NTP, or typed by the user), never a guess, so any program reading it can
-rely on it. The header needs the Pico SDK's `pico_aon_timer` library.
+The `settime` program that used to be here has been retired: the shell's
+`date`, `time` and `ntp` do its job. Its last version is in this
+repository's history, at release v1.0.
 
-## settime
-
-[`settime/`](settime/) holds the source, a ready-built
-[`settime.uf2`](settime/settime.uf2), and [SETTIME.TXT](settime/SETTIME.TXT)
-for users. In short:
-
-- Copy `settime.uf2` into `pico2-apps` and run it after switching the
-  PicoCalc on. It joins WiFi, gets the time from NTP, puts it in the
-  shared clock and returns to the shell.
-- If the clock is already set, it shows the time and returns at once
-  (N fetches it again anyway).
-- Settings live in `/settime.cfg`, or `/virtualt/virtualt.cfg` if that's
-  missing (same format):
-
-  ```
-  ssid=YourNetwork
-  password=YourWiFiPassword
-  tz=PST8PDT,M3.2.0,M11.1.0
-  ntp=pool.ntp.org
-  ```
-
-- Needs a **Pico 2 W** and 2.4 GHz WPA2 WiFi. The file is about 350 KB of
-  flash, almost all of it the CYW43 WiFi chip's firmware.
-
-To build: `git submodule update --init`, then build the `settime/`
-directory with the Pico SDK 2.x (including its `lib/cyw43-driver` and
-`lib/lwip` submodules), for `PICO_BOARD=pico2_w`.
+To have files dated, programs using the text-starter's FAT32 driver can
+pass the shell's time to it with `fat32_set_time_source()`, from
+[this branch](https://github.com/ctorkildson-netizen/picocalc-text-starter/tree/fat32-timestamps)
+until it reaches the text-starter itself.
 
 ## Screenshots
 

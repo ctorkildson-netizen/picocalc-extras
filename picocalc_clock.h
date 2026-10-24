@@ -1,77 +1,94 @@
-/* picocalc_clock.h -- a time of day shared by every program on a PicoCalc.
+/* picocalc_clock.h -- the time of day, for programs written for the older
+ * shared clock in this repository.
  *
  * SPDX-License-Identifier: MIT
  * Copyright (c) 2026 Chris Torkildson.
  *
- * The PicoCalc has no battery-backed clock, but the RP2350's always-on
- * (POWMAN) timer keeps running, from the crystal, through the soft reboot
- * that UF2 Loader does when it switches from one program to the next. It
- * only stops when the power is switched off. So one program (settime, or
- * VirtualT) can set the time once after power-on, and every program
- * started after that can read it.
+ * The shared clock now lives in Blair Leduc's PicoCalc shell (v1.1 and
+ * later): the shell keeps the time in the RP2350's always-on timer, with a
+ * record of it that tells a program whether it is set and what the local
+ * time zone is, and in a DS3231 when there is one. New programs should use
+ * picocalc_shell_time() from the shell's picocalc_shell.h directly.
+ *
+ * This header keeps the three functions older programs here used, on top
+ * of the shell's clock:
  *
  *     #include "picocalc_clock.h"
  *     ...
- *     if (picocalc_clock_load())    // sets this program's time() etc.
+ *     if (picocalc_clock_load())    // sets this program's time(), and TZ
  *         ...the time is known...
  *
- *     // after learning the time some other way (NTP, the user typing it):
- *     picocalc_clock_save();        // share the current time() with the
- *                                   // programs that run after this one
+ *     picocalc_clock_save();        // after learning the time some other way
  *
- * Only real times should go into the timer -- never a guess -- so that a
- * program reading it can trust it. Times are UTC (seconds since 1970);
- * set the TZ environment variable for local time.
- *
- * Needs the Pico SDK's pico_aon_timer library (RP2350 only).
+ * Needs picocalc-shell v1.1's include/picocalc_shell.h on the include path,
+ * and hardware_powman linked.
  */
 #ifndef PICOCALC_CLOCK_H
 #define PICOCALC_CLOCK_H
 
 #include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/time.h>
 #include <time.h>
-#include "pico/aon_timer.h"
+#include "picocalc_shell.h"
 
-/* Anything earlier than this (Sept 2020) is the timer counting from
-   power-on rather than a real date. */
+#ifndef PICOCALC_SHELL_HAS_TIME
+#error "picocalc_clock.h needs picocalc-shell v1.1 or later, and hardware_powman linked"
+#endif
+
+/* Anything earlier than this (Sept 2020) can't be a real date. */
 #define PICOCALC_CLOCK_VALID_AFTER 1600000000
 
-/* True if the always-on timer holds a real time; fills *ts if not NULL. */
+/* True if the shell's clock is set; fills *ts (UTC) if not NULL. */
 static inline bool picocalc_clock_is_set(struct timespec *ts)
 {
-    struct timespec t;
-    if (!aon_timer_is_running() || !aon_timer_get_time(&t))
+    int64_t ms;
+    int offset;
+    if (!picocalc_shell_time(&ms, &offset))
         return false;
-    if (t.tv_sec < PICOCALC_CLOCK_VALID_AFTER)
-        return false;
-    if (ts)
-        *ts = t;
+    if (ts) {
+        ts->tv_sec = (time_t)(ms / 1000);
+        ts->tv_nsec = (long)(ms % 1000) * 1000000L;
+    }
     return true;
 }
 
-/* Set this program's clock (time(), gettimeofday(), localtime()) from the
-   shared clock. Returns false, changing nothing, if it isn't set. */
+/* Set this program's clock (time(), gettimeofday()) from the shell's, and,
+   unless the program has set TZ itself, its time zone from the shell's, so
+   localtime() gives local time. Returns false, changing nothing, if the
+   clock isn't set. */
 static inline bool picocalc_clock_load(void)
 {
-    struct timespec ts;
-    if (!picocalc_clock_is_set(&ts))
+    int64_t ms;
+    int offset;
+    if (!picocalc_shell_time(&ms, &offset))
         return false;
-    struct timeval tv = { .tv_sec = ts.tv_sec, .tv_usec = ts.tv_nsec / 1000 };
+    struct timeval tv = { .tv_sec = (time_t)(ms / 1000), .tv_usec = (long)(ms % 1000) * 1000L };
     settimeofday(&tv, NULL);
+    if (!getenv("TZ")) {
+        /* POSIX TZ counts the other way: 7 hours behind UTC is "+7" */
+        int west = -offset, a = west < 0 ? -west : west;
+        char tz[24];
+        snprintf(tz, sizeof tz, "LOC%c%d:%02d", west < 0 ? '-' : '+', a / 60, a % 60);
+        setenv("TZ", tz, 1);
+        tzset();
+    }
     return true;
 }
 
-/* Copy this program's current time into the shared clock. Returns false
-   if this program doesn't know a real time itself. */
+/* Put this program's current time into the shell's clock, for the programs
+   after it (the shell writes the DS3231, if there is one, when it comes
+   back). Returns false if this program doesn't know a real time itself. */
 static inline bool picocalc_clock_save(void)
 {
     struct timeval tv;
     gettimeofday(&tv, NULL);
     if (tv.tv_sec < PICOCALC_CLOCK_VALID_AFTER)
         return false;
-    struct timespec ts = { .tv_sec = tv.tv_sec, .tv_nsec = tv.tv_usec * 1000 };
-    return aon_timer_is_running() ? aon_timer_set_time(&ts) : aon_timer_start(&ts);
+    picocalc_shell_set_time((int64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000);
+    return true;
 }
 
 #endif /* PICOCALC_CLOCK_H */

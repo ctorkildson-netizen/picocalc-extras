@@ -97,7 +97,7 @@ bool PDC_picocalc_screenshot(void)
             return false;
     }
 
-    /* name it by date and time when the shared clock is set (see
+    /* name it by date and time when the shell's clock is set (see
        pcclock.c), e.g. empire-2026-10-17_133045.bmp; otherwise the
        next unused number, empire-001.bmp */
     time_t now = time(NULL);

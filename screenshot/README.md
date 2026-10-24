@@ -15,7 +15,7 @@ drivers (as in picocalc-rogue, and the Empire and Adventure ports).
 - Files go to `/screenshots` on the SD card, which is created if needed.
 - Names come from a `PICOCALC_APP_NAME` define, so programs don't
   overwrite each other's files:
-  - when the shared clock is set (see [`picocalc_clock.h`](../picocalc_clock.h)),
+  - when the shell's clock is set (shell v1.1; see [`picocalc_clock.h`](../picocalc_clock.h)),
     `empire-2026-10-17_133045.bmp`, with `-2`, `-3` ... added for more
     than one in the same second;
   - otherwise the next free number: `empire-001.bmp`.
@@ -24,8 +24,9 @@ drivers (as in picocalc-rogue, and the Empire and Adventure ports).
 ## Adding it to a program
 
 1. Add `pdcshot.c` to the program's sources next to the backend's
-   `pdc*.c` files, and put `picocalc_clock.h` on the include path (and
-   link `pico_aon_timer`).
+   `pdc*.c` files, and put `picocalc_clock.h` and the shell's
+   `include/picocalc_shell.h` (v1.1 or later) on the include path (and
+   link `hardware_powman`).
 2. Give the program a name for its files, in its CMakeLists.txt:
 
    ```cmake
