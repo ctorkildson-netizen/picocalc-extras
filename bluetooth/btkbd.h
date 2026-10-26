@@ -1,0 +1,72 @@
+/* btkbd.h -- a Bluetooth keyboard for the PicoCalc (Pico 2 W)
+ *
+ * SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 Chris Torkildson.
+ *
+ * Keys typed on a Bluetooth keyboard come out of btkbd_read() in the same
+ * form as the PicoCalc's own keyboard gives them from sb_read_keyboard():
+ * (state << 8) | code, with KEY_STATE_PRESSED or KEY_STATE_RELEASED and the
+ * codes in the text starter's keyboard.h. Ctrl, Shift and Alt come as
+ * their own presses and releases (KEY_MOD_CTRL and so on), letters in
+ * lower case, other characters already shifted -- just as the PicoCalc
+ * sends them -- so a program can mix the two keyboards in one loop.
+ *
+ * Linked with bluetooth.cmake, the keys also come out of sb_read_keyboard(),
+ * after the PicoCalc's own, so a program that reads the keyboard through
+ * the text starter's driver gets the Bluetooth keyboard with no changes;
+ * btkbd_merge(false) turns that off (to tell the two keyboards apart).
+ *
+ * Bluetooth runs in the background. Pairing is done with the btpair
+ * program; other programs only reconnect, and needn't call btkbd_poll().
+ *
+ * The pairing is kept on the SD card, in /bluetooth/pairing.dat, so every
+ * program that uses this finds the same keyboard.
+ *
+ *     btkbd_init();                  // after fat32_init()
+ *     ...then read the keyboard as usual
+ */
+#ifndef BTKBD_H
+#define BTKBD_H
+
+#include <stdbool.h>
+#include <stdint.h>
+
+typedef enum {
+	BTKBD_OFF,		/* the radio didn't start */
+	BTKBD_STARTING,
+	BTKBD_IDLE,		/* no keyboard paired */
+	BTKBD_WAITING,		/* paired: waiting for the keyboard to connect */
+	BTKBD_SEARCHING,
+	BTKBD_PAIRING,		/* connecting to a keyboard chosen from the search */
+	BTKBD_CONNECTED,
+} btkbd_state_t;
+
+/* start the radio; reconnects to the keyboard paired before, if any */
+bool btkbd_init(void);
+/* save a new pairing to the card: call it now and then while pairing */
+void btkbd_poll(void);
+/* the next key event from the Bluetooth keyboard alone, or 0 */
+uint16_t btkbd_read(void);
+/* whether sb_read_keyboard() also gives the Bluetooth keyboard's keys (it does at first) */
+void btkbd_merge(bool on);
+
+btkbd_state_t btkbd_state(void);
+/* a short line saying what's happening, for the screen */
+const char *btkbd_status(void);
+/* the name of the paired keyboard, or "" */
+const char *btkbd_name(void);
+
+/* pairing: search for keyboards in pairing mode (about 10 seconds) */
+void btkbd_search(void);
+int btkbd_found(void);			/* how many found so far */
+const char *btkbd_found_name(int i);
+void btkbd_pair(int i);
+/* while pairing: what to type on the keyboard (then Enter), or NULL */
+const char *btkbd_code(void);
+/* a line of details for testing */
+const char *btkbd_diag(void);
+const char *btkbd_trace(void);	/* the last few Bluetooth events */
+/* forget the paired keyboard */
+void btkbd_forget(void);
+
+#endif

@@ -2,12 +2,14 @@
 
 Small pieces for programs on the ClockworkPi **PicoCalc** with an RP2350
 (Pico 2 / Pico 2 W) and UF2 Loader: Shift+F5 screenshots for PDCurses
-programs, a file picker, JPEG/PNG/BMP decoders, and a header for the
-shell's clock.
+programs, a file picker, JPEG/PNG/BMP decoders, a Bluetooth keyboard, and a
+header for the shell's clock.
 
 They came out of porting Empire, Colossal Cave Adventure and VirtualT
 (a TRS-80 Model 100 emulator) to the PicoCalc, and of writing its
-[picture viewer](https://github.com/ctorkildson-netizen/picocalc-viewer).
+[picture viewer](https://github.com/ctorkildson-netizen/picocalc-viewer) and
+[Diamond](https://github.com/ctorkildson-netizen/diamond), a WordStar-style
+word processor.
 
 | Piece | What it is |
 |---|---|
@@ -15,13 +17,17 @@ They came out of porting Empire, Colossal Cave Adventure and VirtualT
 | [`screenshot/`](screenshot/) | Shift+F5 screenshots (BMP) for PDCurses programs on the PicoCalc |
 | [`nes/`](nes/) | A ready-made build of the ShapoNES NES emulator for the PicoCalc |
 | [`picker/`](picker/) | A file picker: lists a folder, moves around the card, returns the file chosen, with an optional banner and preview panel |
+| [`bluetooth/`](bluetooth/) | A Bluetooth keyboard for programs on a Pico 2 W, and **btpair**, which pairs one: its keys come through the normal keyboard reads, so most programs need only one line |
 | [`images/`](images/) | JPEG, PNG and BMP decoders that fit a picture to a frame, plus a PC harness for testing them |
 | [`HOWTO.md`](HOWTO.md) | How to use the picker and the decoders in your own program, with an example |
 
 Everything here is MIT-licensed (see [LICENSE](LICENSE)), except the build in
 `nes/`, which is Shapoco's ShapoNES, shared with his permission, and the
 JPEG and PNG decoders that `images/` uses, which keep their own licences
-(see [its README](images/README.md#whose-code)).
+(see [its README](images/README.md#whose-code)), and BTstack, which
+`bluetooth/` builds on and which comes with the Pico SDK under Raspberry Pi's
+licence for the Pico W and Pico 2 W (see
+[its README](bluetooth/README.md#whose-code)).
 
 ## The shared clock
 

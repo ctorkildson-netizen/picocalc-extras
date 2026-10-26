@@ -7,3 +7,10 @@
 [submodule "examples/showpic/modules/picocalc-shell"]
 	path = examples/showpic/modules/picocalc-shell
 	url = https://github.com/BlairLeduc/picocalc-shell.git
+[submodule "bluetooth/btpair/modules/picocalc-shell"]
+	path = bluetooth/btpair/modules/picocalc-shell
+	url = https://github.com/BlairLeduc/picocalc-shell
+[submodule "bluetooth/btpair/modules/picocalc-text-starter"]
+	path = bluetooth/btpair/modules/picocalc-text-starter
+	url = https://github.com/ctorkildson-netizen/picocalc-text-starter
+	branch = diamond-dev
