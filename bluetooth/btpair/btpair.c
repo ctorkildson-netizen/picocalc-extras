@@ -6,6 +6,7 @@
  * Copyright (c) 2026 Chris Torkildson. */
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include "pico/stdlib.h"
 #include "drivers/lcd.h"
 #include "drivers/font.h"
@@ -15,7 +16,7 @@
 #include "picocalc_shell.h"
 #include "btkbd.h"
 
-#define VERSION "1.0.1"
+#define VERSION "1.2"
 #define COLS 40
 #define SCREEN_ROWS 32
 #define C_TEXT 0xC618		/* light grey */
@@ -75,7 +76,8 @@ static int para(int row, uint16_t colour, const char *s)
 	return row;
 }
 
-/* F5: the screen as text, in /screenshots/btpair-NNN.txt */
+/* F5: the screen as text, in /screenshots/btpair-NNN.txt, and the Bluetooth
+   log since starting in btpair-NNN.pklg (Wireshark opens it) */
 static char note[COLS + 1];
 static void screenshot(void)
 {
@@ -95,7 +97,23 @@ static void screenshot(void)
 			fat32_write(&f, buf, (size_t)l, &put);
 		}
 		fat32_close(&f);
-		snprintf(note, sizeof note, "Saved %s", path + 13);
+		/* and the Bluetooth log beside it, for Wireshark */
+		size_t len;
+		uint32_t lost;
+		const uint8_t *log = btkbd_log(&len, &lost);
+		if (!log || !len) { snprintf(note, sizeof note, "Saved %s", path + 13); return; }
+		size_t at = strlen(path) - 4;
+		snprintf(path + at, sizeof path - at, ".pklg");
+		bool ok = fat32_create(&f, path) == FAT32_OK;
+		for (size_t done = 0; ok && done < len; ) {
+			size_t n = len - done > 4096 ? 4096 : len - done, put = 0;
+			ok = fat32_write(&f, log + done, n, &put) == FAT32_OK && put == n;
+			done += n;
+		}
+		if (ok) fat32_close(&f);
+		path[at] = 0;
+		if (ok) snprintf(note, sizeof note, "Saved %s .txt .pklg %uK%s", path + 13, (unsigned)((len + 1023) / 1024), lost ? " FULL" : "");
+		else snprintf(note, sizeof note, "Saved %s.txt; the log failed", path + 13);
 		return;
 	}
 	snprintf(note, sizeof note, "Couldn't save the screen");
@@ -193,7 +211,7 @@ static void draw(void)
 {
 	clear();
 	char b[COLS + 1];
-	line(0, C_TITLE, "Bluetooth keyboard              btpair " VERSION);
+	line(0, C_TITLE, "Bluetooth keyboard        btpair " VERSION);
 	btkbd_state_t st = btkbd_state();
 	const char *name = btkbd_name();
 
@@ -210,6 +228,16 @@ static void draw(void)
 				line(3, C_GOOD, "Connected");
 				line(5, C_TEXT, "Type on it to try it out:");
 				for (int r = 0; r < TRY_ROWS; r++) line(6 + r, C_KEY, tried[r]);
+				unsigned pr; int px, py, pw, pb;
+				btkbd_pointer(&pr, &px, &py, &pw, &pb);
+				if (pr) {
+					snprintf(b, sizeof b, "Trackpad: %u reports", pr);
+					line(7 + TRY_ROWS, C_TEXT, b);
+					snprintf(b, sizeof b, "  x %d  y %d  wheel %d  buttons %d%d%d", px, py, pw, pb & 1, (pb >> 1) & 1, (pb >> 2) & 1);
+					line(8 + TRY_ROWS, C_KEY, b);
+				} else {
+					line(7 + TRY_ROWS, C_DIM, "Trackpad: nothing from it yet");
+				}
 			} else if (st == BTKBD_STARTING) {
 				line(3, C_DIM, "Starting Bluetooth...");
 			} else {
@@ -244,7 +272,7 @@ static void draw(void)
 			para(4, C_TEXT, "No keyboards found. Is its light blinking quickly? Put it in pairing mode again, then press S.");
 		}
 		for (int i = 0; i < n && i < 8; i++) {
-			snprintf(b, sizeof b, "  %d  %.34s", i + 1, btkbd_found_name(i));
+			snprintf(b, sizeof b, "  %d  %.34s%s", i + 1, btkbd_found_name(i), btkbd_found_le(i) ? "  (BLE)" : "");
 			line(7 + i, C_KEY, b);
 		}
 		static const char *const k[] = { "  1-8  pair with that keyboard", "  S    look again", "  Esc  cancel", NULL };
@@ -270,11 +298,15 @@ static void draw(void)
 
 	if (message[0]) para(19, message_colour, message);
 	if (details) {
-		line(29, C_DIM, btkbd_status());
-		line(30, C_DIM, btkbd_diag());
-		line(31, C_DIM, btkbd_trace());
+		if (note[0]) line(23, C_DIM, note);		/* (what F5 did) */
+		line(28, C_DIM, btkbd_status());
+		line(29, C_DIM, btkbd_diag());
+		line(30, C_DIM, btkbd_trace_line(0));
+		line(31, C_DIM, btkbd_trace_line(1));
+		if (page != PAIRING)	/* (there, the code to type goes in the middle) */
+			for (int i = 0; i < 10; i++) if (btkbd_smp(i)[0]) line(9 + i, C_DIM, btkbd_smp(i));
 	} else {
-		line(30, C_DIM, note[0] ? note : "  D  details     F5  save this screen");
+		line(30, C_DIM, note[0] ? note : "  D  details   F5  save screen and log");
 	}
 }
 
@@ -297,6 +329,27 @@ static void follow(void)
 	}
 }
 
+/* the shell's clock, for dating the files btpair writes (screenshots, the
+   pairing): false if the shell hasn't set it */
+static bool shell_clock(uint16_t *date, uint16_t *time)
+{
+#ifdef PICOCALC_SHELL_HAS_TIME
+	int64_t ms;
+	int offset;
+	if (!picocalc_shell_time(&ms, &offset)) return false;
+	time_t t = (time_t)(ms / 1000) + (time_t)offset * 60;
+	struct tm tm;
+	gmtime_r(&t, &tm);
+	if (tm.tm_year + 1900 < 1980 || tm.tm_year + 1900 > 2107) return false;
+	fat32_pack_time(tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, date, time);
+	return true;
+#else
+	(void)date;
+	(void)time;
+	return false;
+#endif
+}
+
 int main(void)
 {
 	sb_init();
@@ -307,6 +360,7 @@ int main(void)
 	lcd_clear_screen();
 	for (int r = 0; r < SCREEN_ROWS; r++) memset(shown[r], ' ', COLS), shown[r][COLS] = 0;
 	fat32_init();
+	fat32_set_time_source(shell_clock);
 	keyboard_init();
 	btkbd_init();
 	btkbd_merge(false);	/* the PicoCalc's keys run this; the Bluetooth keyboard's are being tried out */

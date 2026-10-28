@@ -26,6 +26,8 @@ target_include_directories(btpair PRIVATE
     ${TS}                                   # "drivers/lcd.h" and so on
     ${DRV}
     ${CMAKE_CURRENT_LIST_DIR}/modules/picocalc-shell/include)
+# F5 saves the Bluetooth log beside the screen, for reports (256 KB of RAM)
+target_compile_definitions(btpair PRIVATE BTKBD_LOG)
 pico_set_program_name(btpair "btpair")
 pico_enable_stdio_uart(btpair 0)
 pico_enable_stdio_usb(btpair 0)

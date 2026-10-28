@@ -16,6 +16,9 @@
  * the text starter's driver gets the Bluetooth keyboard with no changes;
  * btkbd_merge(false) turns that off (to tell the two keyboards apart).
  *
+ * Both kinds of keyboard work: "classic" Bluetooth ones, and Bluetooth Low
+ * Energy (BLE) ones, which speak HID over GATT.
+ *
  * Bluetooth runs in the background. Pairing is done with the btpair
  * program; other programs only reconnect, and needn't call btkbd_poll().
  *
@@ -30,6 +33,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stddef.h>
 
 typedef enum {
 	BTKBD_OFF,		/* the radio didn't start */
@@ -60,12 +64,21 @@ const char *btkbd_name(void);
 void btkbd_search(void);
 int btkbd_found(void);			/* how many found so far */
 const char *btkbd_found_name(int i);
+bool btkbd_found_le(int i);		/* a Bluetooth Low Energy keyboard */
 void btkbd_pair(int i);
 /* while pairing: what to type on the keyboard (then Enter), or NULL */
 const char *btkbd_code(void);
 /* a line of details for testing */
 const char *btkbd_diag(void);
 const char *btkbd_trace(void);	/* the last few Bluetooth events */
+const char *btkbd_trace_line(int line);	/* the last 24, in two lines: 0 the older, 1 the newer */
+const char *btkbd_smp(int i);	/* BLE pairing and L2CAP signalling messages, 0-9: "out"/"in" and the bytes */
+/* built with BTKBD_LOG: every Bluetooth packet since starting, in PacketLogger
+   format (Wireshark reads it), and how many didn't fit; otherwise none */
+const uint8_t *btkbd_log(size_t *len, uint32_t *lost);
+/* a trackpad or mouse on the keyboard, for testing: how many reports have
+   come, the movement added up since the start, and the buttons held now */
+void btkbd_pointer(unsigned *reports, int *x, int *y, int *wheel, int *buttons);
 /* forget the paired keyboard */
 void btkbd_forget(void);
 

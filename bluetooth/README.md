@@ -20,10 +20,18 @@ by itself, and its keys work alongside the PicoCalc's own.
 4. If a number appears, type it on the Bluetooth keyboard and press that
    keyboard's Enter key.
 
+On a Logitech K380, pairing mode is holding one of its 1, 2, 3 keys (the
+channel you want) until its light blinks quickly. If some keys come out
+wrong, set it to its Windows layout: hold **Fn** and **P** for three
+seconds.
+
 btpair says when it's paired and connected, and you can try the keyboard
 out on its screen. **F** forgets the keyboard; **D** shows the details of
 what Bluetooth is doing, and **F5** saves the screen as a text file in
-`/screenshots`, which helps with a report if something goes wrong.
+`/screenshots`, and beside it a log of every Bluetooth message since btpair
+started (`btpair-001.pklg` and so on). If something goes wrong, those two
+files are what to send with a report: the log opens in
+[Wireshark](https://www.wireshark.org/), which shows each message in full.
 
 The pairing is kept on the SD card, in `/bluetooth/pairing.dat`, so every
 program finds the same keyboard. A program connects when you press a key on
@@ -45,8 +53,10 @@ K380's app-switch key arrives as a Tab, for instance). Hold Fn for the real
 F keys.
 
 **What works:** "classic" Bluetooth keyboards, the kind that have been
-around for years, such as the Logitech K380. Keyboards that only speak
-Bluetooth Low Energy aren't supported yet. One keyboard at a time.
+around for years, and Bluetooth Low Energy (BLE) keyboards; btpair marks
+those "(BLE)" in its list. Tried so far: the Logitech K380 (classic), the
+Logitech K480 (classic, tried by a forum member), and the ProtoArc XK01 TP
+folding keyboard (BLE; its trackpad isn't used). One keyboard at a time.
 
 ## Using it in a program
 
@@ -87,7 +97,7 @@ him (the `diamond-dev` branch of
 
 Things to know:
 
-- **Size:** Bluetooth adds about 300 KB to a program, most of it the
+- **Size:** Bluetooth adds a few hundred KB to a program, most of it the
   radio's firmware. If a program's quick load time matters, make the
   Bluetooth version a separate build, as Diamond does (`diamond-bt.uf2`).
 - **Memory:** BTstack takes a few KB as it connects. A program that grabs
@@ -97,12 +107,24 @@ Things to know:
   in the last sectors of flash, which UF2 Loader and other programs may
   use. This code supplies its own `btstack_cyw43_init()` that keeps them
   on the card instead, so it doesn't link `pico_btstack_cyw43`.
-- It brings its own `btstack_config.h` (classic Bluetooth, with memory from
-  `malloc`).
+- It brings its own `btstack_config.h` (classic Bluetooth and BLE, with
+  memory from `malloc`).
+- **Two fixes to BTstack.** `bluetooth.cmake` builds BTstack's `hci.c` and
+  `l2cap.c` with one small change each, made at configure time from the
+  SDK's own copies, so they follow the SDK; the build stops with a message
+  if the SDK's code there changes. Without them a K380's first connection
+  after pairing stalled until the keyboard gave up, and forgetting a
+  keyboard while it was being called left BTstack refusing to connect to it
+  until a restart. The comments in `bluetooth.cmake` say what each changes.
+- **A log, if you want one:** built with `BTKBD_LOG` defined (btpair is),
+  the library keeps every Bluetooth message in 256 KB of RAM in Apple's
+  PacketLogger format, along with BTstack's own notes, and `btkbd_log()`
+  hands it to the program to save.
 
 ## Whose code
 
-The code here is MIT-licensed. It's built on BTstack's `hid_host_demo.c`.
+The code here is MIT-licensed. It's built on BTstack's `hid_host_demo.c`, and the BLE part uses
+BTstack's HID-over-GATT host as its `hog_host_demo.c` does.
 BTstack itself (BlueKitchen GmbH) comes with the Pico SDK and is licensed by
 Raspberry Pi for use on the Pico W and Pico 2 W; see `LICENSE.RP` in the
 SDK's `src/rp2_common/pico_btstack`.

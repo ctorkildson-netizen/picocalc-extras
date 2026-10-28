@@ -1,11 +1,20 @@
 /* btstack_config.h -- BTstack settings for a Bluetooth keyboard on the
- * PicoCalc (Pico 2 W). Classic Bluetooth HID host only, for now.
+ * PicoCalc (Pico 2 W): the HID hosts, classic and BLE.
  * Based on the Pico SDK's test/kitchen_sink/btstack_config.h. */
 #ifndef BTSTACK_CONFIG_H
 #define BTSTACK_CONFIG_H
 
-/* (ENABLE_CLASSIC comes from linking pico_btstack_classic) */
+/* (ENABLE_CLASSIC and ENABLE_BLE come from linking pico_btstack_classic
+   and pico_btstack_ble) */
+#define ENABLE_LE_CENTRAL
+#define ENABLE_LE_SECURE_CONNECTIONS
+#define ENABLE_MICRO_ECC_FOR_LE_SECURE_CONNECTIONS
+#define MAX_NR_SM_LOOKUP_ENTRIES 3
+#define MAX_NR_WHITELIST_ENTRIES 1
 #define ENABLE_LOG_ERROR
+#ifdef BTKBD_LOG
+#define ENABLE_LOG_INFO	/* (into btpair's log, not printed) */
+#endif
 #define ENABLE_PRINTF_HEXDUMP	/* (the SDK always builds its hci dump; nothing is printed) */
 
 /* buffers and sizes */
@@ -27,7 +36,7 @@
 
 /* pairings, kept on the SD card (see btkbd.c) */
 #define NVM_NUM_LINK_KEYS 8
-#define NVM_NUM_DEVICE_DB_ENTRIES 8
+#define NVM_NUM_DEVICE_DB_ENTRIES 6	/* (BLE bondings) */
 
 #define HAVE_EMBEDDED_TIME_MS
 #define HAVE_ASSERT
