@@ -230,7 +230,14 @@ static void draw_frame(const picker_style_t *st, const char *dir)
 	lcd_set_font(&font_5x10);
 	snprintf(b, sizeof b, "%s", tail(dir, 64));
 	put(0, path_row, 64, C_PATH, false, b);
-	put(0, HELP_ROW, 64, C_DIM, false, "Up/Down: move  Enter: open  Bksp: up a folder  Esc: quit  ?: help");
+	/* (at most 64 characters: the program's keys go before Esc) */
+	snprintf(b, sizeof b, "Up/Down: move  Enter: open  Bksp: up  %s%sEsc: quit  ?: help",
+		st->keys_footer ? st->keys_footer : "", st->keys_footer ? "  " : "");
+	if (strlen(b) > 64) {
+		snprintf(b, sizeof b, "Up/Dn  Enter: open  Bksp: up  %s%sEsc: quit  ?: help",
+			st->keys_footer ? st->keys_footer : "", st->keys_footer ? "  " : "");
+	}
+	put(0, HELP_ROW, 64, C_DIM, false, b);
 }
 
 static const char *const *help_extra;	/* the program's own keys */

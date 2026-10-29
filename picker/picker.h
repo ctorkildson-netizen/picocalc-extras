@@ -31,6 +31,9 @@ typedef struct {
 	   line for each in the help box (NULL-terminated).  May be NULL. */
 	const char *keys;
 	const char *const *keys_help;
+	/* The program's own keys for the line at the bottom, such as "N: new"
+	   (short: the line is 64 characters).  May be NULL. */
+	const char *keys_footer;
 } picker_style_t;
 
 /* Lists dir (an absolute path, updated as the user moves around) and waits.
