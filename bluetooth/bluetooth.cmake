@@ -26,6 +26,10 @@ target_link_options(picocalc_btkbd INTERFACE -Wl,--wrap=sb_read_keyboard)
 # Two fixes to BTstack, made at configure time from the SDK's own copies (so
 # they follow the SDK; the build stops if the code they change has changed).
 # btkbd_fix(file old new) swaps the SDK's file for the fixed one in the build.
+# BTKBD_FIX_HCI and BTKBD_FIX_L2CAP turn each off, for a BTstack that has it
+# fixed already (BlueKitchen took the l2cap.c one for their next release).
+option(BTKBD_FIX_HCI "btkbd's fix to BTstack's hci.c" ON)
+option(BTKBD_FIX_L2CAP "btkbd's fix to BTstack's l2cap.c" ON)
 function(btkbd_fix FILE OLD NEW)
     set(ORIG ${PICO_BTSTACK_PATH}/src/${FILE})
     string(MAKE_C_IDENTIFIER ${FILE} NAME)
@@ -51,9 +55,11 @@ endfunction()
 # command that checks the key size (which opens the keyboard's connection)
 # waited for an event that never came, until the keyboard gave up 20 s later.
 # The fix: carry on when the transport is synchronous.
+if (BTKBD_FIX_HCI)
 btkbd_fix(hci.c
     "        hci_host_num_completed_packets();        \n        return;\n"
     "        hci_host_num_completed_packets();\n        // (btkbd: a synchronous transport is free again now, and nothing else\n        // would run this for commands still waiting)\n        if (!hci_transport_synchronous()) return;\n        if (!hci_can_send_command_packet_transport()) return;\n")
+endif()
 
 # 2. l2cap.c. Closing a channel that is still waiting for its connection to
 # the keyboard (hid_host_disconnect() while it pages) sent a disconnect request
@@ -61,6 +67,8 @@ btkbd_fix(hci.c
 # hid_host kept its record and refused to connect to that keyboard again
 # (COMMAND_DISALLOWED) until a restart. The fix: such a channel fails at once,
 # as it would if the connection had failed, which hid_host tidies up after.
+if (BTKBD_FIX_L2CAP)
 btkbd_fix(l2cap.c
     "    channel->state = L2CAP_STATE_WILL_SEND_DISCONNECT_REQUEST;\n    l2cap_run();\n    return ERROR_CODE_SUCCESS;\n}\n"
     "    // (btkbd: a classic channel not connected yet has no one to ask: fail it now)\n    if ((channel->channel_type == L2CAP_CHANNEL_TYPE_CLASSIC) &&\n        ((channel->state == L2CAP_STATE_WILL_SEND_CREATE_CONNECTION) || (channel->state == L2CAP_STATE_WAIT_CONNECTION_COMPLETE))){\n        btstack_linked_list_remove(&l2cap_channels, (btstack_linked_item_t *) channel);\n        l2cap_handle_channel_open_failed(channel, ERROR_CODE_UNKNOWN_CONNECTION_IDENTIFIER);\n        l2cap_free_channel_entry(channel);\n        return ERROR_CODE_SUCCESS;\n    }\n    channel->state = L2CAP_STATE_WILL_SEND_DISCONNECT_REQUEST;\n    l2cap_run();\n    return ERROR_CODE_SUCCESS;\n}\n")
+endif()

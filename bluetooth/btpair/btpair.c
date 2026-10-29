@@ -16,7 +16,7 @@
 #include "picocalc_shell.h"
 #include "btkbd.h"
 
-#define VERSION "1.2"
+#define VERSION "1.3"
 #define COLS 40
 #define SCREEN_ROWS 32
 #define C_TEXT 0xC618		/* light grey */
@@ -191,7 +191,7 @@ static void tried_key(uint16_t e)
 /* ------------------------------------------------------------ the pages */
 
 enum { HOME, PREPARE, SEARCH, PAIRING } page = HOME;
-static char message[80];		/* a line about what just happened */
+static char message[160];		/* a line or two about what just happened */
 static uint16_t message_colour = C_GOOD;
 static char chosen[40];			/* the keyboard being paired */
 static bool details;
@@ -231,12 +231,12 @@ static void draw(void)
 				unsigned pr; int px, py, pw, pb;
 				btkbd_pointer(&pr, &px, &py, &pw, &pb);
 				if (pr) {
-					snprintf(b, sizeof b, "Trackpad: %u reports", pr);
+					snprintf(b, sizeof b, "Pointer: %u reports", pr);
 					line(7 + TRY_ROWS, C_TEXT, b);
 					snprintf(b, sizeof b, "  x %d  y %d  wheel %d  buttons %d%d%d", px, py, pw, pb & 1, (pb >> 1) & 1, (pb >> 2) & 1);
 					line(8 + TRY_ROWS, C_KEY, b);
 				} else {
-					line(7 + TRY_ROWS, C_DIM, "Trackpad: nothing from it yet");
+					line(7 + TRY_ROWS, C_DIM, "Pointer (mouse, trackpad): nothing yet");
 				}
 			} else if (st == BTKBD_STARTING) {
 				line(3, C_DIM, "Starting Bluetooth...");

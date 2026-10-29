@@ -56,7 +56,17 @@ F keys.
 around for years, and Bluetooth Low Energy (BLE) keyboards; btpair marks
 those "(BLE)" in its list. Tried so far: the Logitech K380 (classic), the
 Logitech K480 (classic, tried by a forum member), and the ProtoArc XK01 TP
-folding keyboard (BLE; its trackpad isn't used). One keyboard at a time.
+folding keyboard (BLE). One keyboard at a time.
+
+**Mice and trackpads:** a Bluetooth mouse pairs in btpair the same way (a
+Logitech M720 has been tried, over BLE), and so does a keyboard's trackpad.
+Programs get the movement and buttons from `btkbd_pointer()`: the movement
+added up since starting, so take the last reading from the new one. A mouse
+takes the one pairing, so pair the keyboard again afterwards.
+
+**If a BLE keyboard stops connecting:** most of them choose a new identity
+each time they're put into pairing mode, so the PicoCalc no longer knows
+them. Pair it again in btpair.
 
 ## Using it in a program
 
@@ -116,6 +126,10 @@ Things to know:
   after pairing stalled until the keyboard gave up, and forgetting a
   keyboard while it was being called left BTstack refusing to connect to it
   until a restart. The comments in `bluetooth.cmake` say what each changes.
+  BlueKitchen fixed both in BTstack itself (the `hci.c` one by a change in
+  1.8.3, the `l2cap.c` one on their development branch), so with a Pico SDK
+  that brings a newer BTstack, turn them off: `-DBTKBD_FIX_HCI=OFF`,
+  `-DBTKBD_FIX_L2CAP=OFF`.
 - **A log, if you want one:** built with `BTKBD_LOG` defined (btpair is),
   the library keeps every Bluetooth message in 256 KB of RAM in Apple's
   PacketLogger format, along with BTstack's own notes, and `btkbd_log()`
