@@ -55,8 +55,9 @@ F keys.
 **What works:** "classic" Bluetooth keyboards, the kind that have been
 around for years, and Bluetooth Low Energy (BLE) keyboards; btpair marks
 those "(BLE)" in its list. Tried so far: the Logitech K380 (classic), the
-Logitech K480 (classic, tried by a forum member), and the ProtoArc XK01 TP
-folding keyboard (BLE). One keyboard at a time.
+Logitech K480 (classic, tried by a forum member), the ProtoArc XK01 TP
+folding keyboard (BLE), and the Keyron K6 (BLE, tried by a forum member).
+One keyboard at a time.
 
 **Mice and trackpads:** a Bluetooth mouse pairs in btpair the same way (a
 Logitech M720 has been tried, over BLE), and so does a keyboard's trackpad.
