@@ -1,6 +1,7 @@
 # bluetooth.cmake -- a Bluetooth keyboard for a Pico SDK program on the
 # PicoCalc with a Pico 2 W, using Blair Leduc's picocalc-text-starter drivers
-# (keyboard.h for the key codes, fat32 for keeping the pairing).
+# (keyboard.h for the key codes, and the file system, FatFs, for keeping the
+# pairing: picocalc-text-starter v0.17 or later; see ../fatfs/fatfs.cmake).
 #
 #   set(PICO_BOARD pico2_w)
 #   include(path/to/bluetooth/bluetooth.cmake)

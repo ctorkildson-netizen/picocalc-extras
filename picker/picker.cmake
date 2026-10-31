@@ -1,5 +1,6 @@
 # picker.cmake -- the file picker, for a Pico SDK program that uses Blair
-# Leduc's picocalc-text-starter drivers (lcd, keyboard, fat32, southbridge).
+# Leduc's picocalc-text-starter drivers (lcd, keyboard, southbridge, and the
+# file system: v0.17 or later, FatFs; see ../fatfs/fatfs.cmake).
 #
 #   include(path/to/picocalc-extras/picker/picker.cmake)
 #   target_link_libraries(myprogram picocalc_picker ...)

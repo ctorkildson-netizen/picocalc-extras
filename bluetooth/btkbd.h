@@ -25,7 +25,7 @@
  * The pairing is kept on the SD card, in /bluetooth/pairing.dat, so every
  * program that uses this finds the same keyboard.
  *
- *     btkbd_init();                  // after fat32_init()
+ *     btkbd_init();                  // after fs_init() (or picocalc_init())
  *     ...then read the keyboard as usual
  */
 #ifndef BTKBD_H

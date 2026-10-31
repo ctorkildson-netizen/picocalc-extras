@@ -17,7 +17,7 @@
 #include "drivers/font.h"
 #include "drivers/keyboard.h"
 #include "drivers/southbridge.h"
-#include "drivers/fat32.h"
+#include "drivers/filesystem.h"
 #include "picker.h"
 #include "icons.h"
 
@@ -70,25 +70,25 @@ static bool load(const char *dir, bool (*filter)(const char *))
 {
 	free_list();
 	truncated = false;
-	fat32_file_t d;
-	if (fat32_open(&d, dir) != FAT32_OK) return false;
+	DIR d;
+	if (f_opendir(&d, dir) != FR_OK) return false;
 	if (strcmp(dir, "/") != 0) {
 		ents[n_ents] = (entry_t){ strdup(".."), true, 0, 0, 0 };
 		n_ents++;
 	}
-	fat32_entry_t e;
+	static FILINFO e;			/* (about 280 bytes: off the stack) */
 	for (;;) {
-		if (fat32_dir_read(&d, &e) != FAT32_OK || !e.filename[0]) break;
-		if (e.attr & (FAT32_ATTR_VOLUME_ID | FAT32_ATTR_HIDDEN | FAT32_ATTR_SYSTEM)) continue;
-		if (e.filename[0] == '.') continue;	/* ".", "..", and macOS "._x" files */
-		bool isdir = (e.attr & FAT32_ATTR_DIRECTORY) != 0;
-		if (!isdir && filter && !filter(e.filename)) continue;
+		if (f_readdir(&d, &e) != FR_OK || !e.fname[0]) break;
+		if (e.fattrib & (AM_HID | AM_SYS)) continue;
+		if (e.fname[0] == '.') continue;	/* macOS "._x" files (FatFs leaves out "." and "..") */
+		bool isdir = (e.fattrib & AM_DIR) != 0;
+		if (!isdir && filter && !filter(e.fname)) continue;
 		if (n_ents == MAX_ENTRIES) { truncated = true; break; }
-		char *name = strdup(e.filename);
+		char *name = strdup(e.fname);
 		if (!name) { truncated = true; break; }
-		ents[n_ents++] = (entry_t){ name, isdir, e.size, e.date, e.time };
+		ents[n_ents++] = (entry_t){ name, isdir, (uint32_t)e.fsize, e.fdate, e.ftime };
 	}
-	fat32_close(&d);
+	f_closedir(&d);
 	qsort(ents, n_ents, sizeof ents[0], cmp);
 	for (n_dirs = 0; n_dirs < n_ents && ents[n_dirs].dir; n_dirs++) ;
 	return true;
@@ -298,7 +298,7 @@ static bool key_within(uint32_t ms)
 int picker_run(const picker_style_t *st, char *dir, const char *start, char *path)
 {
 	help_extra = st->keys_help;
-	char focus[FAT32_MAX_FILENAME_LEN + 1] = "";
+	char focus[FF_MAX_LFN + 1] = "";
 	char full[PICKER_PATH];
 	if (start) snprintf(focus, sizeof focus, "%s", start);
 	for (;;) {

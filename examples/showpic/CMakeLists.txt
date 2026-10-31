@@ -19,20 +19,24 @@ include(${EXTRAS}/images/images.cmake)
 # Blair Leduc's drivers and shell header, submodules of this example
 set(TS ${CMAKE_CURRENT_LIST_DIR}/modules/picocalc-text-starter)
 set(DRV ${TS}/drivers)
+# the file system (FatFs) as the text starter builds it
+include(${CMAKE_CURRENT_LIST_DIR}/../../fatfs/fatfs.cmake)
+picocalc_fatfs(${TS})
 add_executable(showpic
     main.c
-    ${DRV}/fat32.c ${DRV}/sdcard.c ${DRV}/font-5x10.c ${DRV}/font-8x10.c
+    ${DRV}/font-5x10.c ${DRV}/font-8x10.c
     ${DRV}/keyboard.c ${DRV}/lcd.c ${DRV}/southbridge.c
 )
 target_include_directories(showpic PRIVATE
     ${TS}                                   # "drivers/lcd.h" and so on
     ${DRV}
     ${CMAKE_CURRENT_LIST_DIR}/modules/picocalc-shell/include)
+
 pico_set_program_name(showpic "showpic")
 pico_enable_stdio_uart(showpic 0)
 pico_enable_stdio_usb(showpic 0)
 # the decoders check for NULL from malloc(); without this the SDK stops instead
 target_compile_definitions(showpic PRIVATE PICO_MALLOC_PANIC=0)
-target_link_libraries(showpic picocalc_picker picocalc_images
+target_link_libraries(showpic picocalc_picker picocalc_images picocalc_fs
     pico_stdlib hardware_gpio hardware_i2c hardware_spi hardware_pio hardware_watchdog)
 pico_add_extra_outputs(showpic)

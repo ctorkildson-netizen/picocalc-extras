@@ -17,20 +17,24 @@ include(${CMAKE_CURRENT_LIST_DIR}/../bluetooth.cmake)
 # Blair Leduc's drivers and shell header, submodules of this program
 set(TS ${CMAKE_CURRENT_LIST_DIR}/modules/picocalc-text-starter)
 set(DRV ${TS}/drivers)
+# the file system (FatFs) as the text starter builds it
+include(${CMAKE_CURRENT_LIST_DIR}/../../fatfs/fatfs.cmake)
+picocalc_fatfs(${TS})
 add_executable(btpair
     btpair.c
-    ${DRV}/fat32.c ${DRV}/sdcard.c ${DRV}/font-5x10.c ${DRV}/font-8x10.c
+    ${DRV}/font-5x10.c ${DRV}/font-8x10.c
     ${DRV}/keyboard.c ${DRV}/lcd.c ${DRV}/southbridge.c
 )
 target_include_directories(btpair PRIVATE
     ${TS}                                   # "drivers/lcd.h" and so on
     ${DRV}
     ${CMAKE_CURRENT_LIST_DIR}/modules/picocalc-shell/include)
+
 # F5 saves the Bluetooth log beside the screen, for reports (256 KB of RAM)
 target_compile_definitions(btpair PRIVATE BTKBD_LOG)
 pico_set_program_name(btpair "btpair")
 pico_enable_stdio_uart(btpair 0)
 pico_enable_stdio_usb(btpair 0)
-target_link_libraries(btpair picocalc_btkbd
+target_link_libraries(btpair picocalc_btkbd picocalc_fs
     pico_stdlib hardware_gpio hardware_i2c hardware_spi hardware_pio hardware_watchdog hardware_powman)
 pico_add_extra_outputs(btpair)

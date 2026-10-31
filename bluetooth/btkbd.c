@@ -22,7 +22,7 @@
 #include "pico/btstack_hci_transport_cyw43.h"
 #include "classic/btstack_link_key_db_tlv.h"
 #include "ble/le_device_db_tlv.h"
-#include "drivers/fat32.h"
+#include "drivers/filesystem.h"
 #include "drivers/keyboard.h"
 
 /* ------------------------------------------------------------ storage */
@@ -48,12 +48,12 @@ static bool store_upgraded;
 
 static void store_load(void)
 {
-	fat32_file_t f;
-	size_t got = 0;
+	FIL f;
+	UINT got = 0;
 	memset(&store, 0, sizeof store);
-	if (fat32_open(&f, STORE_PATH) == FAT32_OK) {
-		fat32_read(&f, &store, sizeof store, &got);
-		fat32_close(&f);
+	if (f_open(&f, STORE_PATH, FA_READ) == FR_OK) {
+		f_read(&f, &store, sizeof store, &got);
+		f_close(&f);
 	}
 	if (store.magic == OLD_MAGIC && got >= 4 + 16 * sizeof(old_record_t)) {
 		/* carried over, and saved in the new form */
@@ -89,16 +89,13 @@ static void store_changed(void)
 static void store_save(void)
 {
 	store_dirty = false;
-	fat32_file_t f;
-	if (fat32_open(&f, STORE_PATH) != FAT32_OK) {
-		fat32_file_t d;
-		if (fat32_dir_create(&d, STORE_DIR) == FAT32_OK) fat32_close(&d);
-		if (fat32_create(&f, STORE_PATH) != FAT32_OK) return;
-	}
-	size_t put;
-	fat32_seek(&f, 0);
-	fat32_write(&f, &store, sizeof store, &put);
-	fat32_close(&f);
+	FIL f;
+	f_mkdir(STORE_DIR);			/* (FR_EXIST if it's there) */
+	/* the same size every time, so it's rewritten in place */
+	if (f_open(&f, STORE_PATH, FA_WRITE | FA_OPEN_ALWAYS) != FR_OK) return;
+	UINT put;
+	f_write(&f, &store, sizeof store, &put);
+	f_close(&f);
 }
 
 static record_t *find(uint32_t tag)

@@ -12,7 +12,7 @@
 #include "drivers/font.h"
 #include "drivers/keyboard.h"
 #include "drivers/southbridge.h"
-#include "drivers/fat32.h"
+#include "drivers/filesystem.h"
 #include "picocalc_shell.h"
 #include "btkbd.h"
 
@@ -81,22 +81,23 @@ static int para(int row, uint16_t colour, const char *s)
 static char note[COLS + 1];
 static void screenshot(void)
 {
-	fat32_file_t f;
+	FIL f;
 	char path[48];
-	if (fat32_dir_create(&f, "/screenshots") == FAT32_OK) fat32_close(&f);
+	f_mkdir("/screenshots");			/* (FR_EXIST if it's there) */
 	for (int n = 1; n < 1000; n++) {
 		snprintf(path, sizeof path, "/screenshots/btpair-%03d.txt", n);
-		if (fat32_open(&f, path) == FAT32_OK) { fat32_close(&f); continue; }
-		if (fat32_create(&f, path) != FAT32_OK) break;
+		FRESULT fr = f_open(&f, path, FA_WRITE | FA_CREATE_NEW);
+		if (fr == FR_EXIST) continue;
+		if (fr != FR_OK) break;
 		for (int r = 0; r < SCREEN_ROWS; r++) {
 			char buf[COLS + 3];
 			int l = snprintf(buf, sizeof buf, "%s", shown[r]);
 			while (l > 0 && buf[l - 1] == ' ') l--;
 			buf[l++] = '\r', buf[l++] = '\n';
-			size_t put;
-			fat32_write(&f, buf, (size_t)l, &put);
+			UINT put;
+			f_write(&f, buf, (UINT)l, &put);
 		}
-		fat32_close(&f);
+		f_close(&f);
 		/* and the Bluetooth log beside it, for Wireshark */
 		size_t len;
 		uint32_t lost;
@@ -104,13 +105,13 @@ static void screenshot(void)
 		if (!log || !len) { snprintf(note, sizeof note, "Saved %s", path + 13); return; }
 		size_t at = strlen(path) - 4;
 		snprintf(path + at, sizeof path - at, ".pklg");
-		bool ok = fat32_create(&f, path) == FAT32_OK;
+		bool ok = f_open(&f, path, FA_WRITE | FA_CREATE_ALWAYS) == FR_OK;
 		for (size_t done = 0; ok && done < len; ) {
-			size_t n = len - done > 4096 ? 4096 : len - done, put = 0;
-			ok = fat32_write(&f, log + done, n, &put) == FAT32_OK && put == n;
+			UINT n = (UINT)(len - done > 4096 ? 4096 : len - done), put = 0;
+			ok = f_write(&f, log + done, n, &put) == FR_OK && put == n;
 			done += n;
 		}
-		if (ok) fat32_close(&f);
+		if (f_close(&f) != FR_OK) ok = false;
 		path[at] = 0;
 		if (ok) snprintf(note, sizeof note, "Saved %s .txt .pklg %uK%s", path + 13, (unsigned)((len + 1023) / 1024), lost ? " FULL" : "");
 		else snprintf(note, sizeof note, "Saved %s.txt; the log failed", path + 13);
@@ -329,27 +330,6 @@ static void follow(void)
 	}
 }
 
-/* the shell's clock, for dating the files btpair writes (screenshots, the
-   pairing): false if the shell hasn't set it */
-static bool shell_clock(uint16_t *date, uint16_t *time)
-{
-#ifdef PICOCALC_SHELL_HAS_TIME
-	int64_t ms;
-	int offset;
-	if (!picocalc_shell_time(&ms, &offset)) return false;
-	time_t t = (time_t)(ms / 1000) + (time_t)offset * 60;
-	struct tm tm;
-	gmtime_r(&t, &tm);
-	if (tm.tm_year + 1900 < 1980 || tm.tm_year + 1900 > 2107) return false;
-	fat32_pack_time(tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, date, time);
-	return true;
-#else
-	(void)date;
-	(void)time;
-	return false;
-#endif
-}
-
 int main(void)
 {
 	sb_init();
@@ -359,8 +339,7 @@ int main(void)
 	lcd_set_background(0x0000);
 	lcd_clear_screen();
 	for (int r = 0; r < SCREEN_ROWS; r++) memset(shown[r], ' ', COLS), shown[r][COLS] = 0;
-	fat32_init();
-	fat32_set_time_source(shell_clock);
+	fs_init();				/* (files are dated by the shell's clock) */
 	keyboard_init();
 	btkbd_init();
 	btkbd_merge(false);	/* the PicoCalc's keys run this; the Bluetooth keyboard's are being tried out */

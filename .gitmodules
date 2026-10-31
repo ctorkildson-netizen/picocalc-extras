@@ -3,7 +3,7 @@
 	url = https://github.com/bitbank2/PNGdec.git
 [submodule "examples/showpic/modules/picocalc-text-starter"]
 	path = examples/showpic/modules/picocalc-text-starter
-	url = https://github.com/BlairLeduc/picocalc-text-starter.git
+	url = https://github.com/BlairLeduc/picocalc-text-starter
 [submodule "examples/showpic/modules/picocalc-shell"]
 	path = examples/showpic/modules/picocalc-shell
 	url = https://github.com/BlairLeduc/picocalc-shell.git
@@ -12,5 +12,4 @@
 	url = https://github.com/BlairLeduc/picocalc-shell
 [submodule "bluetooth/btpair/modules/picocalc-text-starter"]
 	path = bluetooth/btpair/modules/picocalc-text-starter
-	url = https://github.com/ctorkildson-netizen/picocalc-text-starter
-	branch = diamond-dev
+	url = https://github.com/BlairLeduc/picocalc-text-starter

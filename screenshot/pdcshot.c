@@ -5,8 +5,8 @@
  * Copyright (c) 2026 Chris Torkildson.
  *
  * Needs: the PicoCalc PDCurses backend's pdcpicocalc.h, Blair Leduc's
- * picocalc-text-starter drivers (font, fat32), and picocalc_clock.h (for
- * date-stamped names). See README.md for the two-line keyboard hook.
+ * picocalc-text-starter drivers (font, and the file system: v0.17 or
+ * later, with clib.c), and picocalc_clock.h (for date-stamped names). See README.md for the two-line keyboard hook.
  */
 #include <time.h>
 #include "picocalc_clock.h"
@@ -15,7 +15,7 @@
 
 #include "pdcpicocalc.h"
 #include <drivers/font.h>
-#include <drivers/fat32.h>
+#include <drivers/filesystem.h>
 
 /* Each program sets PICOCALC_APP_NAME in its CMakeLists.txt, so files
    from different programs never collide: /screenshots/empire-001.bmp,
@@ -87,13 +87,10 @@ bool PDC_picocalc_screenshot(void)
     if (!SP || !curscr)
         return false;
 
-    /* make sure /screenshots exists (FILE_EXISTS is fine) */
+    /* make sure /screenshots exists (already there is fine) */
     {
-        fat32_file_t dir;
-        fat32_error_t err = fat32_dir_create(&dir, "/screenshots");
-        if (err == FAT32_OK)
-            fat32_close(&dir);
-        else if (err != FAT32_ERROR_FILE_EXISTS)
+        FRESULT err = f_mkdir("/screenshots");
+        if (err != FR_OK && err != FR_EXIST)
             return false;
     }
 
