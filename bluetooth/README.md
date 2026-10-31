@@ -1,16 +1,17 @@
-# Bluetooth keyboards for the PicoCalc
+# Bluetooth keyboards and mice for the PicoCalc
 
-A Bluetooth keyboard for programs on the ClockworkPi **PicoCalc** with a
-**Pico 2 W** (the one with the radio). Pair the keyboard once with
-**btpair**; from then on, any program built with this code connects to it
-by itself, and its keys work alongside the PicoCalc's own.
+A Bluetooth keyboard, and a mouse beside it, for programs on the
+ClockworkPi **PicoCalc** with a **Pico 2 W** (the one with the radio). Pair
+them once with **btpair**; from then on, any program built with this code
+connects to them by itself, and the keyboard's keys work alongside the
+PicoCalc's own.
 
 ## Pairing a keyboard (btpair)
 
 1. Copy `btpair.uf2` (from the latest
    [picocalc-extras release](https://github.com/ctorkildson-netizen/picocalc-extras/releases))
    into `pico2-apps` on the SD card and run btpair from the shell.
-2. Press **P**, and put the keyboard in pairing mode: on most keyboards you
+2. Press **K**, and put the keyboard in pairing mode: on most keyboards you
    hold its Bluetooth or connect key until its light blinks quickly.
 3. Press **Enter** on the PicoCalc. After about ten seconds the keyboards
    it found are listed: press the number of yours. A keyboard may show as
@@ -26,15 +27,15 @@ wrong, set it to its Windows layout: hold **Fn** and **P** for three
 seconds.
 
 btpair says when it's paired and connected, and you can try the keyboard
-out on its screen. **F** forgets the keyboard; **D** shows the details of
+out on its screen. **D** shows the details of
 what Bluetooth is doing, and **F5** saves the screen as a text file in
 `/screenshots`, and beside it a log of every Bluetooth message since btpair
 started (`btpair-001.pklg` and so on). If something goes wrong, those two
 files are what to send with a report: the log opens in
 [Wireshark](https://www.wireshark.org/), which shows each message in full.
 
-The pairing is kept on the SD card, in `/bluetooth/pairing.dat`, so every
-program finds the same keyboard. A program connects when you press a key on
+The pairings are kept on the SD card, in `/bluetooth/pairing.dat`, so every
+program finds the same keyboard and mouse. A program connects when you press a key on
 the keyboard, or within a few seconds of starting if the keyboard is
 already awake.
 
@@ -57,13 +58,18 @@ around for years, and Bluetooth Low Energy (BLE) keyboards; btpair marks
 those "(BLE)" in its list. Tried so far: the Logitech K380 (classic), the
 Logitech K480 (classic, tried by a forum member), the ProtoArc XK01 TP
 folding keyboard (BLE), and the Keyron K6 (BLE, tried by a forum member).
-One keyboard at a time.
 
-**Mice and trackpads:** a Bluetooth mouse pairs in btpair the same way (a
-Logitech M720 has been tried, over BLE), and so does a keyboard's trackpad.
-Programs get the movement and buttons from `btkbd_pointer()`: the movement
-added up since starting, so take the last reading from the new one. A mouse
-takes the one pairing, so pair the keyboard again afterwards.
+## Pairing a mouse
+
+Press **M** in btpair and pair it the same way: most mice go into pairing
+mode when you hold a button underneath until a light blinks quickly. The
+mouse is kept beside the keyboard, and both connect together, each classic
+or BLE; pairing a new keyboard or mouse replaces only the old one
+of the same kind. **F** forgets one (it asks which, if both are paired).
+Tried so far: the Logitech M720 (BLE).
+
+A keyboard's own trackpad comes through as a mouse too, without pairing
+anything else.
 
 **If a BLE keyboard stops connecting:** most of them choose a new identity
 each time they're put into pairing mode, so the PicoCalc no longer knows
@@ -97,8 +103,13 @@ So the text starter's keyboard driver, and any code that reads the
 keyboard, gets both keyboards with no other changes.
 
 To tell the two keyboards apart instead, call `btkbd_merge(false)` and read
-the Bluetooth keyboard with `btkbd_read()`. See [btkbd.h](btkbd.h) for the
-rest: the connection's state, and the search and pairing calls btpair uses.
+the Bluetooth keyboard with `btkbd_read()`.
+
+The mouse: `btkbd_mouse(&dx, &dy, &wheel, &buttons)` gives how far it has
+moved since the last call, and the buttons held now (bit 0 left, 1 right,
+2 middle); it returns true if anything changed. See [btkbd.h](btkbd.h) for
+the rest: each device's state and name, and the search and pairing calls
+btpair uses.
 
 [`btpair/`](btpair/) is a complete program using it, and builds the same way
 as the [example](../examples/showpic/) in this repository; its submodules are
