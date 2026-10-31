@@ -84,7 +84,7 @@ target_link_libraries(myprogram picocalc_btkbd ...)
 ```c
 #include "btkbd.h"
 ...
-fat32_init();
+fs_init();           // or picocalc_init(), which calls it
 btkbd_init();        // starts Bluetooth, which then runs in the background
 ```
 
@@ -102,9 +102,10 @@ rest: the connection's state, and the search and pairing calls btpair uses.
 
 [`btpair/`](btpair/) is a complete program using it, and builds the same way
 as the [example](../examples/showpic/) in this repository; its submodules are
-Blair's shell (v1.2) and the text starter with the FAT32 fixes offered to
-him (the `diamond-dev` branch of
-[a fork](https://github.com/ctorkildson-netizen/picocalc-text-starter)).
+Blair's shell (v1.2) and text starter (v0.17, which reads the card with
+FatFs). [`fatfs/fatfs.cmake`](../fatfs/fatfs.cmake) builds FatFs the way
+the text starter does, as one target to link:
+`picocalc_fatfs(path/to/picocalc-text-starter)`, then `picocalc_fs`.
 
 Things to know:
 

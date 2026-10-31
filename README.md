@@ -66,10 +66,23 @@ The `settime` program that used to be here has been retired: the shell's
 `date`, `time` and `ntp` do its job. Its last version is in this
 repository's history, at release v1.0.
 
-To have files dated, programs using the text-starter's FAT32 driver can
-pass the shell's time to it with `fat32_set_time_source()`, from
-[this branch](https://github.com/ctorkildson-netizen/picocalc-text-starter/tree/fat32-timestamps)
-until it reaches the text-starter itself.
+Since v0.17 the text starter dates files from the shell's clock itself,
+when it's set, with nothing to set up.
+
+## FatFs
+
+Since v0.17 the text starter reads the card with FatFs (`f_open`,
+`f_read` and the rest, from `drivers/filesystem.h`). Everything here that
+touches the card uses it, so programs need v0.17 or later.
+[`fatfs/fatfs.cmake`](fatfs/fatfs.cmake) builds it in two lines:
+
+```cmake
+include(path/to/picocalc-extras/fatfs/fatfs.cmake)
+picocalc_fatfs(path/to/picocalc-text-starter)
+target_link_libraries(myprogram picocalc_fs ...)
+```
+
+Programs on an older text starter can stay on picocalc-extras v1.3.
 
 ## Screenshots
 

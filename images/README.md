@@ -37,8 +37,8 @@ for (int r = c.rotate; r > 0; r -= 90) canvas_turn(&c);   /* as the camera asks 
 /* frame now holds the picture */
 ```
 
-Reading a big file in small pieces is slow with the text-starter FAT32
-driver, so the viewer reads through a 16 KB buffer (see its `main.c`).
+The viewer reads through a 16 KB buffer (see its `main.c`), as the
+decoders ask for many small pieces and every card read costs time.
 
 ## Speed and memory
 

@@ -113,7 +113,7 @@ you take over.
 ## 4. Showing a picture
 
 The decoders read the file through four functions **you** write, so they
-work with any way of reading files. Over the text-starter's FAT32, with a
+work with any way of reading files. Over the text-starter's FatFs, with a
 16 KB buffer (see [why](#9-things-to-know)), they're the first thing in
 [the example's main.c](examples/showpic/main.c): copy them.
 
@@ -126,8 +126,8 @@ Then, to show a picture:
 static uint16_t frame[320 * 320];          /* RGB565, 200 KB */
 
 img_src_t src = { 0 };
-fat32_open(&src.f, path);                  /* check for errors */
-src.size = fat32_size(&src.f);
+f_open(&src.f, path, FA_READ);             /* FR_OK, or an error */
+src.size = f_size(&src.f);
 
 uint8_t head[16];
 size_t n = src_read(&src, head, sizeof head);
@@ -140,7 +140,7 @@ src_seek(&src, 0);
 const char *err = fmt->decode(&src, &c.sink);           /* NULL: it worked */
 for (int r = c.rotate; r > 0; r -= 90) canvas_turn(&c); /* camera orientation */
 lcd_blit(frame, 0, 0, 320, 320);
-fat32_close(&src.f);
+f_close(&src.f);
 ```
 
 - `format_for_head()` goes by the file's first bytes, which is safer than
@@ -181,7 +181,7 @@ static void preview(const char *path, int x, int y, int size)
 	canvas_clear(&c);
 	if (!fmt->decode(&src, &c.sink) && !c.cancelled)
 		lcd_blit(thumb, x, y, size, size);
-	fat32_close(&src.f);
+	f_close(&src.f);
 }
 ```
 
@@ -245,12 +245,10 @@ try a new format, or a file that won't open.
 
 ## 9. Things to know
 
-- **Reading speed.** The text-starter's `fat32_read()` (v0.15) follows the
-  file's cluster chain from its start on every call, so a big file read in
-  small pieces gets slower the further in it goes. Read in large pieces:
-  the 16 KB buffer in the example is enough to make it reasonable. A fix
-  has been offered to Blair; the picture viewer uses it already, from
-  [this branch](https://github.com/ctorkildson-netizen/picocalc-text-starter/tree/fat32-sequential-read).
+- **Reading speed.** Every card read costs time, and the decoders ask
+  for many small pieces, so read through a buffer: the example's 16 KB is
+  plenty. (Seeking backwards in a big file is slower than forwards, as
+  FatFs follows the file's clusters from its start.)
 - **Time.** At the usual 150 MHz, a 4000x3000 camera JPEG takes about 4
   seconds, a 640x480 PNG under a second, a 4000-pixel PNG over 15. PNGs
   can't be decoded at a reduced size the way JPEGs can. The viewer runs at

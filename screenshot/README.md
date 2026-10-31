@@ -57,9 +57,8 @@ drivers (as in picocalc-rogue, and the Empire and Adventure ports).
 
    (Adjust the buffer names to match your backend's key buffer.)
 
-The file dates on the card are left blank: the text-starter FAT32 driver
-doesn't stamp dates yet, so the date-and-time name carries that
-information instead.
+The files are dated from the shell's clock when it's set (text starter
+v0.17 or later), and the date-and-time name carries it too.
 
 ## A related keyboard fix
 
