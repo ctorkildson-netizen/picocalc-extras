@@ -1,5 +1,5 @@
-/* btpair -- pairs a Bluetooth keyboard with the PicoCalc (Pico 2 W), step
- * by step, and lets you try it out. Programs built with the shared
+/* btpair -- pairs a Bluetooth keyboard and mouse with the PicoCalc (Pico 2
+ * W), step by step, and lets you try them out. Programs built with the shared
  * Bluetooth code (bluetooth/) then connect to it by themselves.
  *
  * SPDX-License-Identifier: MIT
@@ -16,7 +16,7 @@
 #include "picocalc_shell.h"
 #include "btkbd.h"
 
-#define VERSION "2.0"
+#define VERSION "2.1"
 #define COLS 40
 #define SCREEN_ROWS 32
 #define C_TEXT 0xC618		/* light grey */
@@ -191,11 +191,14 @@ static void tried_key(uint16_t e)
 
 /* ------------------------------------------------------------ the pages */
 
-enum { HOME, PREPARE, SEARCH, PAIRING } page = HOME;
+enum { HOME, PREPARE, SEARCH, PAIRING, FORGET } page = HOME;
+static btkbd_device_t dev;		/* what's being paired: the keyboard or the mouse */
 static char message[160];		/* a line or two about what just happened */
 static uint16_t message_colour = C_GOOD;
-static char chosen[40];			/* the keyboard being paired */
+static char chosen[40];			/* the one being paired */
 static bool details;
+
+static const char *dev_word(void) { return dev == BTKBD_MOUSE ? "mouse" : "keyboard"; }
 
 static void say(uint16_t colour, const char *m)
 {
@@ -208,78 +211,125 @@ static void keys(int row, const char *const *k)
 	for (; *k; k++) line(row++, C_KEY, *k);
 }
 
+static void forget(btkbd_device_t d)
+{
+	btkbd_forget_device(d);
+	say(C_GOOD, d == BTKBD_MOUSE ? "Mouse forgotten. (It may still remember the PicoCalc: that does no harm.)"
+	                             : "Keyboard forgotten. (It may still remember the PicoCalc: that does no harm.)");
+}
+
+/* "Keyboard: K380" and how it is, on two rows */
+static void device_rows(int row, btkbd_device_t d, const char *what)
+{
+	char b[COLS + 1];
+	const char *name = btkbd_device_name(d);
+	btkbd_state_t st = btkbd_device_state(d);
+	if (!name[0]) {
+		snprintf(b, sizeof b, "%s: none paired", what);
+		line(row, C_DIM, b);
+		return;
+	}
+	snprintf(b, sizeof b, "%s: %.30s", what, name);
+	line(row, C_TEXT, b);
+	if (st == BTKBD_CONNECTED) line(row + 1, C_GOOD, "  Connected");
+	else if (st == BTKBD_STARTING) line(row + 1, C_DIM, "  Starting Bluetooth...");
+	else line(row + 1, C_DIM, d == BTKBD_MOUSE ? "  Not connected: move it or click to wake it"
+	                                           : "  Not connected: press a key to wake it");
+}
+
 static void draw(void)
 {
 	clear();
 	char b[COLS + 1];
-	line(0, C_TITLE, "Bluetooth keyboard        btpair " VERSION);
+	line(0, C_TITLE, "Bluetooth keyboard, mouse   btpair " VERSION);
 	btkbd_state_t st = btkbd_state();
-	const char *name = btkbd_name();
 
-	if (page == HOME) {
+	if (page == HOME || page == FORGET) {
+		bool k = btkbd_device_name(BTKBD_KEYBOARD)[0], m = btkbd_device_name(BTKBD_MOUSE)[0];
 		if (st == BTKBD_OFF) {
 			para(2, C_TEXT, "Bluetooth didn't start. This needs a PicoCalc with a Pico 2 W (the one with the radio).");
-		} else if (!name[0]) {
-			line(2, C_TEXT, "No Bluetooth keyboard is paired yet.");
-			para(4, C_TEXT, "Pair one here once, and programs that know about Bluetooth keyboards will connect to it by themselves.");
+		} else if (!k && !m) {
+			line(2, C_TEXT, "No Bluetooth keyboard or mouse is paired.");
+			para(4, C_TEXT, "Pair them here once, and programs that know about Bluetooth will connect to them by themselves.");
 		} else {
-			snprintf(b, sizeof b, "Keyboard: %.30s", name);
-			line(2, C_TEXT, b);
+			device_rows(2, BTKBD_KEYBOARD, "Keyboard");
+			device_rows(4, BTKBD_MOUSE, "Mouse");
 			if (st == BTKBD_CONNECTED) {
-				line(3, C_GOOD, "Connected");
-				line(5, C_TEXT, "Type on it to try it out:");
-				for (int r = 0; r < TRY_ROWS; r++) line(6 + r, C_KEY, tried[r]);
-				unsigned pr; int px, py, pw, pb;
-				btkbd_pointer(&pr, &px, &py, &pw, &pb);
-				if (pr) {
-					snprintf(b, sizeof b, "Pointer: %u reports", pr);
-					line(7 + TRY_ROWS, C_TEXT, b);
-					snprintf(b, sizeof b, "  x %d  y %d  wheel %d  buttons %d%d%d", px, py, pw, pb & 1, (pb >> 1) & 1, (pb >> 2) & 1);
-					line(8 + TRY_ROWS, C_KEY, b);
-				} else {
-					line(7 + TRY_ROWS, C_DIM, "Pointer (mouse, trackpad): nothing yet");
-				}
-			} else if (st == BTKBD_STARTING) {
-				line(3, C_DIM, "Starting Bluetooth...");
-			} else {
-				line(3, C_DIM, "Not connected");
-				para(5, C_TEXT, "Press a key on the keyboard to wake it up: it connects in a few seconds. Check that it's switched on, and on the right channel if it has more than one.");
+				line(7, C_TEXT, "Type on it to try it out:");
+				for (int r = 0; r < TRY_ROWS; r++) line(8 + r, C_KEY, tried[r]);
+			} else if (k && st != BTKBD_STARTING) {
+				para(7, C_DIM, "Check that the keyboard is switched on, and on the right channel if it has more than one.");
+			}
+			unsigned pr; int px, py, pw, pb;
+			btkbd_pointer(&pr, &px, &py, &pw, &pb);
+			if (pr) {
+				snprintf(b, sizeof b, "Pointer: %u reports", pr);
+				line(15, C_TEXT, b);
+				snprintf(b, sizeof b, "  x %d  y %d  wheel %d  buttons %d%d%d", px, py, pw, pb & 1, (pb >> 1) & 1, (pb >> 2) & 1);
+				line(16, C_KEY, b);
+			} else if (btkbd_device_state(BTKBD_MOUSE) == BTKBD_CONNECTED) {
+				line(15, C_TEXT, "Move the mouse to try it out");
 			}
 		}
-		static const char *const k_paired[] = {
-			"  P    pair a different keyboard",
-			"  F    forget this keyboard",
-			"  Esc  finished: back to the shell", NULL };
-		static const char *const k_none[] = {
-			"  P    pair a keyboard",
-			"  Esc  back to the shell", NULL };
-		if (st != BTKBD_OFF) keys(24, name[0] ? k_paired : k_none);
-		else line(24, C_KEY, "  Esc  back to the shell");
+		if (page == FORGET) {
+			static const char *const k_which[] = {
+				"  K    forget the keyboard",
+				"  M    forget the mouse",
+				"  Esc  forget neither", NULL };
+			keys(24, k_which);
+		} else if (st != BTKBD_OFF) {
+			static const char *const k_both[] = {
+				"  K    pair a keyboard",
+				"  M    pair a mouse",
+				"  F    forget one",
+				"  Esc  finished: back to the shell", NULL };
+			static const char *const k_none[] = {
+				"  K    pair a keyboard",
+				"  M    pair a mouse",
+				"  Esc  back to the shell", NULL };
+			keys(24, k || m ? k_both : k_none);
+		} else {
+			line(24, C_KEY, "  Esc  back to the shell");
+		}
 	} else if (page == PREPARE) {
-		line(2, C_TITLE, "Pairing, step 1 of 3");
-		int r = para(4, C_TEXT, "Put the Bluetooth keyboard in pairing mode. On most keyboards you hold down its Bluetooth or connect key for a few seconds, until its light blinks quickly.");
-		r = para(r + 1, C_DIM, "(A Logitech K380: hold one of the 1, 2, 3 keys. Its manual will say, if yours is different.)");
+		snprintf(b, sizeof b, "Pairing a %s, step 1 of 3", dev_word());
+		line(2, C_TITLE, b);
+		int r;
+		if (dev == BTKBD_MOUSE) {
+			r = para(4, C_TEXT, "Put the Bluetooth mouse in pairing mode. On most mice you hold down a button underneath (or a channel button) for a few seconds, until its light blinks quickly.");
+		} else {
+			r = para(4, C_TEXT, "Put the Bluetooth keyboard in pairing mode. On most keyboards you hold down its Bluetooth or connect key for a few seconds, until its light blinks quickly.");
+			r = para(r + 1, C_DIM, "(A Logitech K380: hold one of the 1, 2, 3 keys. Its manual will say, if yours is different.)");
+		}
 		line(r + 1, C_TEXT, "Then press Enter here to look for it.");
-		static const char *const k[] = { "  Enter  look for keyboards", "  Esc    cancel", NULL };
+		static const char *const k[] = { "  Enter  look for it", "  Esc    cancel", NULL };
 		keys(24, k);
 	} else if (page == SEARCH) {
-		line(2, C_TITLE, "Pairing, step 2 of 3");
+		snprintf(b, sizeof b, "Pairing a %s, step 2 of 3", dev_word());
+		line(2, C_TITLE, b);
 		int n = btkbd_found();
 		if (st == BTKBD_SEARCHING) {
-			line(4, C_TEXT, "Looking for keyboards (10 seconds)...");
+			line(4, C_TEXT, "Looking (10 seconds)...");
 		} else if (n) {
-			line(4, C_TEXT, "Press the number of your keyboard:");
+			snprintf(b, sizeof b, "Press the number of your %s:", dev_word());
+			line(4, C_TEXT, b);
 		} else {
-			para(4, C_TEXT, "No keyboards found. Is its light blinking quickly? Put it in pairing mode again, then press S.");
+			snprintf(b, sizeof b, "Nothing found. Is the %s's light blinking quickly? Put it in pairing mode again, then press S.", dev_word());
+			para(4, C_TEXT, b);
 		}
 		for (int i = 0; i < n && i < 8; i++) {
-			snprintf(b, sizeof b, "  %d  %.34s%s", i + 1, btkbd_found_name(i), btkbd_found_le(i) ? "  (BLE)" : "");
+			int kind = btkbd_found_kind(i);
+			const char *tag = kind == BTKBD_MOUSE ? (btkbd_found_le(i) ? "  (mouse, BLE)" : "  (mouse)")
+			                : kind == BTKBD_KEYBOARD ? (btkbd_found_le(i) ? "  (keyboard, BLE)" : "  (keyboard)")
+			                : btkbd_found_le(i) ? "  (BLE)" : "";
+			snprintf(b, sizeof b, "  %d  %.*s%s", i + 1, 35 - (int)strlen(tag), btkbd_found_name(i), tag);
 			line(7 + i, C_KEY, b);
 		}
-		static const char *const k[] = { "  1-8  pair with that keyboard", "  S    look again", "  Esc  cancel", NULL };
+		static const char *const k[] = { "  1-8  pair with that one", "  S    look again", "  Esc  cancel", NULL };
 		keys(24, k);
 	} else {	/* PAIRING */
-		line(2, C_TITLE, "Pairing, step 3 of 3");
+		snprintf(b, sizeof b, "Pairing a %s, step 3 of 3", dev_word());
+		line(2, C_TITLE, b);
 		snprintf(b, sizeof b, "Pairing with %.27s...", chosen);
 		line(4, C_TEXT, b);
 		const char *code = btkbd_code();
@@ -314,18 +364,20 @@ static void draw(void)
 /* what's happening now that wasn't before */
 static void follow(void)
 {
-	btkbd_state_t st = btkbd_state();
+	btkbd_state_t st = btkbd_device_state(dev);
 	if (page == PAIRING) {
-		bool ours = !strcmp(btkbd_name(), chosen);
+		bool ours = !strcmp(btkbd_device_name(dev), chosen);
 		if (st == BTKBD_CONNECTED && ours) {
 			page = HOME;
-			say(C_GOOD, "Paired and connected. Programs that use Bluetooth keyboards will now find it.");
+			say(C_GOOD, dev == BTKBD_MOUSE ? "Paired and connected. Programs that use a Bluetooth mouse will now find it."
+			                               : "Paired and connected. Programs that use Bluetooth keyboards will now find it.");
 		} else if (st == BTKBD_WAITING && ours) {
 			page = HOME;
-			say(C_GOOD, "Paired. Press a key on the keyboard to connect.");
-		} else if (st == BTKBD_IDLE || st == BTKBD_WAITING) {
+			say(C_GOOD, dev == BTKBD_MOUSE ? "Paired. Move the mouse or click to connect." : "Paired. Press a key on the keyboard to connect.");
+		} else if (st == BTKBD_IDLE || st == BTKBD_WAITING || st == BTKBD_CONNECTED) {
 			page = SEARCH;
-			say(0xFBE0, "That didn't work. Put the keyboard in pairing mode again, press S, and choose it again.");
+			snprintf(message, sizeof message, "That didn't work. Put the %s in pairing mode again, press S, and choose it again.", dev_word());
+			message_colour = 0xFBE0;
 		}
 	}
 }
@@ -363,13 +415,19 @@ int main(void)
 				if (c == KEY_ESC) {
 					lcd_clear_screen();
 					if (!picocalc_shell_exit()) { lcd_putstr(0, 15, "No SD card: switch off to leave."); for (;;) tight_loop_contents(); }
-				} else if (c == 'p' && btkbd_state() != BTKBD_OFF) {
+				} else if ((c == 'k' || c == 'p' || c == 'm') && btkbd_state() != BTKBD_OFF) {
+					dev = c == 'm' ? BTKBD_MOUSE : BTKBD_KEYBOARD;
 					page = PREPARE;
 					message[0] = 0;
-				} else if (c == 'f' && btkbd_name()[0]) {
-					btkbd_forget();
-					say(C_GOOD, "Forgotten. (The keyboard may still remember the PicoCalc: that does no harm.)");
+				} else if (c == 'f') {
+					bool k = btkbd_device_name(BTKBD_KEYBOARD)[0], m = btkbd_device_name(BTKBD_MOUSE)[0];
+					if (k && m) page = FORGET;
+					else if (k || m) forget(k ? BTKBD_KEYBOARD : BTKBD_MOUSE);
 				}
+			} else if (page == FORGET) {
+				if (c == 'k') forget(BTKBD_KEYBOARD);
+				else if (c == 'm') forget(BTKBD_MOUSE);
+				page = HOME;
 			} else if (page == PREPARE) {
 				if (c == KEY_ESC) page = HOME;
 				else if (c == KEY_ENTER || c == KEY_RETURN) { page = SEARCH; message[0] = 0; btkbd_search(); }
@@ -380,7 +438,7 @@ int main(void)
 					snprintf(chosen, sizeof chosen, "%s", btkbd_found_name(c - '1'));
 					message[0] = 0;
 					page = PAIRING;
-					btkbd_pair(c - '1');
+					btkbd_pair_as(c - '1', dev);
 				}
 			} else if (page == PAIRING) {
 				if (c == KEY_ESC) { page = SEARCH; say(0xFBE0, "Cancelled."); }
