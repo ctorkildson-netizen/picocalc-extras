@@ -281,7 +281,10 @@ static void draw(void)
 			if (btkbd_device_state(BTKBD_GAMEPAD) == BTKBD_CONNECTED) {
 				snprintf(b, sizeof b, "Pad: L %4d %4d  R %4d %4d  hat %d", gp.x, gp.y, gp.z, gp.rz, gp.hat);
 				line(17, C_KEY, b);
-				snprintf(b, sizeof b, "  buttons %08lX  triggers %3d %3d", (unsigned long)gp.buttons, gp.brake, gp.gas);
+				snprintf(b, sizeof b, "  triggers %d %d   buttons", gp.brake, gp.gas);
+				for (int i = 0; i < 32; i++)		/* the ones held, by number */
+					if (gp.buttons & (1u << i)) { size_t l = strlen(b); snprintf(b + l, sizeof b - l, " %d", i + 1); }
+				if (!gp.buttons) strcat(b, " -");
 				line(18, C_KEY, b);
 			}
 		}
