@@ -1,4 +1,4 @@
-# btpair -- pairs a Bluetooth keyboard with the PicoCalc (Pico 2 W)
+# btpair -- pairs a Bluetooth keyboard, mouse and gamepad with the PicoCalc (Pico 2 W)
 #
 # Build (Pico SDK 2.x):
 #   git submodule update --init --recursive

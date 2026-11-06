@@ -27,8 +27,8 @@
 
 /* ------------------------------------------------------------ storage */
 
-/* A few tagged records (BTstack's link keys, and which keyboard and which
-   mouse are ours), kept in RAM and saved whole to the SD card when one
+/* A few tagged records (BTstack's link keys, and which keyboard, mouse and
+   gamepad are ours), kept in RAM and saved whole to the SD card when one
    changes. The file is always the same size, so it's rewritten in place. */
 #define TLV_MAX 20
 #define TLV_DATA 72			/* (a BLE bonding takes about 64 bytes) */
@@ -39,6 +39,8 @@
 #define TAG_KEYBOARD_LE 0x4B424C30u	/* "KBL0": a BLE keyboard's address, its type, and name */
 #define TAG_MOUSE 0x50545230u		/* "PTR0": a classic mouse, the same way */
 #define TAG_MOUSE_LE 0x50544C30u	/* "PTL0": a BLE mouse */
+#define TAG_PAD 0x47504430u		/* "GPD0": a classic gamepad */
+#define TAG_PAD_LE 0x47504C30u		/* "GPL0": a BLE gamepad */
 
 typedef struct { uint32_t tag; uint32_t len; uint8_t data[TLV_DATA]; } record_t;
 static struct { uint32_t magic; record_t r[TLV_MAX]; } store;
@@ -175,7 +177,7 @@ static btkbd_state_t state = BTKBD_OFF;
 static char status[48] = "Bluetooth off";
 static char code[12];			/* what to type while pairing */
 
-/* A keyboard and a mouse, each paired, kept and connected on its own. */
+/* A keyboard, a mouse and a gamepad, each paired, kept and connected on its own. */
 typedef struct {
 	uint32_t tag, tag_le;		/* its record in the store: classic, BLE */
 	bool paired, le;
@@ -195,43 +197,51 @@ typedef struct {
 	uint16_t hids_cid;
 } slot_t;
 
-static slot_t slots[2] = {
+#define NSLOT 3
+static slot_t slots[NSLOT] = {
 	[BTKBD_KEYBOARD] = { .tag = TAG_KEYBOARD, .tag_le = TAG_KEYBOARD_LE, .le_handle = HCI_CON_HANDLE_INVALID },
 	[BTKBD_MOUSE] = { .tag = TAG_MOUSE, .tag_le = TAG_MOUSE_LE, .le_handle = HCI_CON_HANDLE_INVALID },
+	[BTKBD_GAMEPAD] = { .tag = TAG_PAD, .tag_le = TAG_PAD_LE, .le_handle = HCI_CON_HANDLE_INVALID },
 };
 #define KBD (&slots[BTKBD_KEYBOARD])
 #define MOUSE (&slots[BTKBD_MOUSE])
-static slot_t *other(slot_t *s) { return s == KBD ? MOUSE : KBD; }
+#define PAD (&slots[BTKBD_GAMEPAD])
+static slot_t *slot_of(btkbd_device_t d) { return &slots[(unsigned)d < NSLOT ? d : 0]; }
+/* what to do to wake it, to connect */
+static const char *wake_hint(const slot_t *s)
+{
+	return s == KBD ? "press a key on the keyboard" : s == MOUSE ? "move the mouse" : "press a button on the gamepad";
+}
 
 static slot_t *slot_by_cid(uint16_t c)
 {
-	for (int i = 0; i < 2; i++) if (c && slots[i].cid == c) return &slots[i];
+	for (int i = 0; i < NSLOT; i++) if (c && slots[i].cid == c) return &slots[i];
 	return NULL;
 }
 static slot_t *slot_by_le(hci_con_handle_t h)
 {
-	for (int i = 0; i < 2; i++) if (h != HCI_CON_HANDLE_INVALID && slots[i].le_handle == h) return &slots[i];
+	for (int i = 0; i < NSLOT; i++) if (h != HCI_CON_HANDLE_INVALID && slots[i].le_handle == h) return &slots[i];
 	return NULL;
 }
 static slot_t *slot_by_hids(uint16_t c)
 {
-	for (int i = 0; i < 2; i++) if (c && slots[i].hids_cid == c) return &slots[i];
+	for (int i = 0; i < NSLOT; i++) if (c && slots[i].hids_cid == c) return &slots[i];
 	return NULL;
 }
 static slot_t *slot_by_addr(const bd_addr_t a, bool le)
 {
-	for (int i = 0; i < 2; i++)
+	for (int i = 0; i < NSLOT; i++)
 		if (slots[i].paired && slots[i].le == le && bd_addr_cmp(slots[i].addr, a) == 0) return &slots[i];
 	return NULL;
 }
 
-static uint8_t descriptor[1024];		/* (classic: both devices' layouts) */
+static uint8_t descriptor[1536];		/* (classic: all the devices' layouts) */
 static btstack_packet_callback_registration_t hci_cb;
 static btstack_timer_source_t retry_timer;
 #define RETRY_MS 15000
 
 /* BLE: one connection is made at a time */
-static uint8_t le_descriptor[1024];
+static uint8_t le_descriptor[1536];
 static enum { LE_IDLE, LE_SEARCHING, LE_WAITING, LE_CONNECTING } le_mode;
 static slot_t *le_connecting;			/* the device that connection is for */
 static btstack_timer_source_t le_timer;
@@ -264,7 +274,7 @@ static struct {
 	uint16_t clock;
 	bool named;
 	bool le;
-	int kind;			/* BTKBD_KEYBOARD, BTKBD_MOUSE, or -1 if it doesn't say */
+	int kind;			/* BTKBD_KEYBOARD, BTKBD_MOUSE, BTKBD_GAMEPAD, or -1 if it doesn't say */
 	bd_addr_type_t type;
 	char name[32];
 } found[FOUND_MAX];
@@ -419,9 +429,9 @@ static void load_slot(slot_t *s)
 	memcpy(s->name, r->data + at, n);
 }
 
-static void load_paired(void) { load_slot(KBD); load_slot(MOUSE); }
+static void load_paired(void) { for (int i = 0; i < NSLOT; i++) load_slot(&slots[i]); }
 
-/* one keyboard and one mouse: a new one replaces the old */
+/* one keyboard, one mouse, one gamepad: a new one replaces the old */
 static void save_paired(slot_t *s, const bd_addr_t addr, const char *name, bool le, bd_addr_type_t type)
 {
 	uint8_t d[TLV_DATA];
@@ -432,11 +442,13 @@ static void save_paired(slot_t *s, const bd_addr_t addr, const char *name, bool 
 	memcpy(d + at, name, n);
 	tlv_delete(NULL, le ? s->tag : s->tag_le);
 	tlv_store(NULL, le ? s->tag_le : s->tag, d, (uint32_t)(at + n));
-	/* (the same device paired as the other one too: it's only this now) */
-	slot_t *o = other(s);
-	if (o->paired && o->le == le && bd_addr_cmp(o->addr, addr) == 0) {
-		tlv_delete(NULL, o->tag);
-		tlv_delete(NULL, o->tag_le);
+	/* (the same device paired as another one too: it's only this now) */
+	for (int i = 0; i < NSLOT; i++) {
+		slot_t *o = &slots[i];
+		if (o != s && o->paired && o->le == le && bd_addr_cmp(o->addr, addr) == 0) {
+			tlv_delete(NULL, o->tag);
+			tlv_delete(NULL, o->tag_le);
+		}
 	}
 	pair_saved = true;
 	load_paired();
@@ -575,54 +587,103 @@ static void keys_now(uint8_t m, const uint8_t *keys, int n)
 	}
 }
 
-static void parse_report(const uint8_t *desc, uint16_t desc_len, const uint8_t *report, uint16_t len);
+static void parse_report(slot_t *s, const uint8_t *desc, uint16_t desc_len, const uint8_t *report, uint16_t len);
 static volatile unsigned ptr_reports;
 static volatile int ptr_x, ptr_y, ptr_wheel, ptr_buttons;	/* added up, since the start */
+static btkbd_pad_t pad = { .hat = -1 };		/* the gamepad as it is now */
+static volatile unsigned pad_reports;
 
 /* a device let go: nothing it held is held any more */
 static void let_go(slot_t *s)
 {
 	s->connected = false;
 	if (s == KBD) release_all();
-	else ptr_buttons = 0;
+	else if (s == MOUSE) ptr_buttons = 0;
+	else { memset(&pad, 0, sizeof pad); pad.hat = -1; pad_reports++; }
 }
 
 static void handle_report(slot_t *s, const uint8_t *report, uint16_t len)
 {
 	if (len < 1 || report[0] != 0xA1) return;		/* an input report */
 	if (s->boot_mode)	/* the layout every keyboard has in boot mode */
-		parse_report(btstack_hid_get_boot_descriptor_data(), btstack_hid_get_boot_descriptor_len(), report + 1, len - 1);
+		parse_report(s, btstack_hid_get_boot_descriptor_data(), btstack_hid_get_boot_descriptor_len(), report + 1, len - 1);
 	else if (s->descriptor_ok)	/* the device's own layout, once it has given it */
-		parse_report(hid_descriptor_storage_get_descriptor_data(s->cid), hid_descriptor_storage_get_descriptor_len(s->cid),
+		parse_report(s, hid_descriptor_storage_get_descriptor_data(s->cid), hid_descriptor_storage_get_descriptor_len(s->cid),
 		             report + 1, len - 1);
 }
 
 /* a report from a BLE device: as from a classic one, without the A1 */
 static void handle_le_report(slot_t *s, uint8_t service, const uint8_t *report, uint16_t len)
 {
-	parse_report(hids_host_descriptor_storage_get_descriptor_data(s->hids_cid, service),
+	parse_report(s, hids_host_descriptor_storage_get_descriptor_data(s->hids_cid, service),
 	             hids_host_descriptor_storage_get_descriptor_len(s->hids_cid, service), report, len);
 }
 
-static void parse_report(const uint8_t *desc, uint16_t desc_len, const uint8_t *report, uint16_t len)
+/* a gamepad's stick or trigger, from its own range to ours: -127..127 with
+   0 in the middle, or (from 0) for a trigger 0..255 */
+static int scale(const btstack_hid_parser_t *p, int32_t v, bool trigger)
+{
+	int32_t lo = p->descriptor_usage_item.global_logical_minimum;
+	int bits = p->descriptor_usage_item.size;
+	if (bits < 1) return 0;
+	int32_t hi = lo < 0 ? (bits >= 32 ? INT32_MAX : (int32_t)((1u << (bits - 1)) - 1))
+	                    : (bits >= 31 ? INT32_MAX : (int32_t)((1u << bits) - 1));
+	int32_t said = p->usage_iterator.global_logical_maximum;	/* (its stated top, when it fits) */
+	if (said > lo && said < hi) hi = said;
+	if (hi <= lo) return 0;
+	int64_t f = ((int64_t)v - lo) * (trigger ? 255 : 254) / ((int64_t)hi - lo);	/* 0..255, or 0..254 */
+	if (f < 0) f = 0;
+	if (trigger) return f > 255 ? 255 : (int)f;
+	return f > 254 ? 127 : (int)f - 127;
+}
+
+static void parse_report(slot_t *s, const uint8_t *desc, uint16_t desc_len, const uint8_t *report, uint16_t len)
 {
 	if (!desc || !desc_len || !len) return;
 	btstack_hid_parser_t parser;
 	btstack_hid_parser_init(&parser, desc, desc_len, HID_REPORT_TYPE_INPUT, report, len);
 	uint8_t m = 0, keys[HELD_MAX];
 	int n = 0;
-	bool any = false, pointer = false;
+	bool any = false, pointer = false, gamepad = false;
 	int32_t px = 0, py = 0, pw = 0, pb = 0;
+	btkbd_pad_t g = pad;
+	bool got_buttons = false;
 	while (btstack_hid_parser_has_more(&parser)) {
 		uint16_t page, usage;
 		int32_t value;
 		btstack_hid_parser_get_field(&parser, &page, &usage, &value);
+		if (s == PAD) {		/* a gamepad: its sticks, triggers, hat and buttons */
+			if (page == 0x01 && usage >= 0x30 && usage <= 0x35) {
+				gamepad = true;
+				int8_t *axis[] = { &g.x, &g.y, &g.z, &g.rx, &g.ry, &g.rz };
+				*axis[usage - 0x30] = (int8_t)scale(&parser, value, false);
+				continue;
+			}
+			if (page == 0x01 && usage == 0x39) {		/* the hat (D-pad): 0 up, then clockwise */
+				gamepad = true;
+				int32_t h = value - parser.descriptor_usage_item.global_logical_minimum;
+				g.hat = h >= 0 && h <= 7 ? (int8_t)h : -1;
+				continue;
+			}
+			if (page == 0x02 && (usage == 0xC4 || usage == 0xC5)) {	/* accelerator, brake */
+				gamepad = true;
+				*(usage == 0xC4 ? &g.gas : &g.brake) = (uint8_t)scale(&parser, value, true);
+				continue;
+			}
+			if (page == 0x09 && usage >= 1 && usage <= 32) {
+				gamepad = true;
+				if (!got_buttons) { g.buttons = 0; got_buttons = true; }
+				if (value) g.buttons |= 1u << (usage - 1);
+				continue;
+			}
+		}
 		/* a mouse, or a keyboard's trackpad */
 		if (page == 0x01 && (usage == 0x30 || usage == 0x31 || usage == 0x38)) {
 			pointer = true;
 			if (usage == 0x30) px = value; else if (usage == 0x31) py = value; else pw = value;
 			continue;
 		}
+		if (s == PAD) continue;			/* (nothing else from a gamepad) */
 		if (page == 0x09 && usage >= 1 && usage <= 8) { pointer = true; if (value) pb |= 1 << (usage - 1); continue; }
 		if (page != 0x07) continue;		/* only the keyboard page */
 		any = true;
@@ -634,6 +695,20 @@ static void parse_report(const uint8_t *desc, uint16_t desc_len, const uint8_t *
 		ptr_reports++;
 		ptr_x += px, ptr_y += py, ptr_wheel += pw, ptr_buttons = pb;
 	}
+	if (gamepad) { pad = g; pad_reports++; }
+}
+
+bool btkbd_gamepad(btkbd_pad_t *p)
+{
+	static unsigned took;
+	if (state == BTKBD_OFF) { memset(p, 0, sizeof *p); p->hat = -1; return false; }
+	lock();
+	*p = pad;
+	unsigned n = pad_reports;
+	unlock();
+	bool any = n != took;
+	took = n;
+	return any;
 }
 
 void btkbd_pointer(unsigned *reports, int *x, int *y, int *wheel, int *buttons)
@@ -672,7 +747,7 @@ static void try_paired(slot_t *s)
 	   without first asking the keyboard for its layout -- which some
 	   keyboards (the K380, after pairing) don't answer, as Linux and others
 	   have found. Boot mode has all the ordinary keys. A mouse in its own
-	   layout, which has the wheel. */
+	   layout, which has the wheel; a gamepad in its own, which is all it has. */
 	hid_protocol_mode_t mode = s == KBD ? HID_PROTOCOL_MODE_BOOT : HID_PROTOCOL_MODE_REPORT;
 	uint8_t err = hid_host_connect(s->addr, mode, &s->cid);
 	s->boot_mode = err == ERROR_CODE_SUCCESS && mode == HID_PROTOCOL_MODE_BOOT;
@@ -687,7 +762,7 @@ static void on_retry(btstack_timer_source_t *t)
 	(void)t;
 	static int turn;
 	bool trying = false;
-	for (int i = 0; i < 2; i++) {
+	for (int i = 0; i < NSLOT; i++) {
 		slot_t *s = &slots[i];
 		if (state == BTKBD_IDLE && s->paired && !s->le && s->cid && !s->connected) {
 			if (++s->stuck >= 2) { hid_host_disconnect(s->cid); s->cid = 0; s->stuck = 0; }
@@ -697,23 +772,24 @@ static void on_retry(btstack_timer_source_t *t)
 		}
 	}
 	if (!trying && state == BTKBD_IDLE)
-		for (int k = 0; k < 2; k++) {
-			slot_t *s = &slots[(turn + k) % 2];
-			if (s->paired && !s->le && !s->cid) { try_paired(s); turn = (turn + k + 1) % 2; break; }
+		for (int k = 0; k < NSLOT; k++) {
+			slot_t *s = &slots[(turn + k) % NSLOT];
+			if (s->paired && !s->le && !s->cid) { try_paired(s); turn = (turn + k + 1) % NSLOT; break; }
 		}
 	btstack_run_loop_set_timer(&retry_timer, RETRY_MS);
 	btstack_run_loop_add_timer(&retry_timer);
 }
 
 /* running, and not searching or pairing: the status line says how the
-   keyboard is (or the mouse, if there's no keyboard) */
+   keyboard is (or the mouse, or the gamepad, if there's no keyboard) */
 static void idle_status(void)
 {
 	state = BTKBD_IDLE;
-	slot_t *s = KBD->paired ? KBD : MOUSE->paired ? MOUSE : NULL;
+	slot_t *s = KBD->paired ? KBD : MOUSE->paired ? MOUSE : PAD->paired ? PAD : NULL;
 	if (!s) set_status("No keyboard paired");
 	else if (s->connected) snprintf(status, sizeof status, "Connected: %.30s", s->name);
-	else snprintf(status, sizeof status, "Waiting for %.24s", s->name[0] ? s->name : s == KBD ? "the keyboard" : "the mouse");
+	else snprintf(status, sizeof status, "Waiting for %.24s", s->name[0] ? s->name
+	              : s == KBD ? "the keyboard" : s == MOUSE ? "the mouse" : "the gamepad");
 }
 
 /* a pairing is over, one way or the other */
@@ -788,7 +864,7 @@ static void le_wait(void)
 {
 	if (le_mode != LE_IDLE || state != BTKBD_IDLE) return;
 	bool want = false;
-	for (int i = 0; i < 2; i++) {
+	for (int i = 0; i < NSLOT; i++) {
 		slot_t *s = &slots[i];
 		if (s->le_handle != HCI_CON_HANDLE_INVALID && !s->connected) return;
 		want |= s->paired && s->le && s->le_handle == HCI_CON_HANDLE_INVALID;
@@ -846,8 +922,8 @@ static bool ad_name(const uint8_t *ad, uint8_t len, char *out, size_t size)
 	return false;
 }
 
-/* what it says it looks like: 0x03C1 a keyboard, 0x03C2 a mouse, 0x03C0 a
-   HID device of some sort; or 0 */
+/* what it says it looks like: 0x03C1 a keyboard, 0x03C2 a mouse, 0x03C3 a
+   joystick, 0x03C4 a gamepad, 0x03C0 a HID device of some sort; or 0 */
 static uint16_t ad_appearance(const uint8_t *ad, uint8_t len)
 {
 	ad_context_t c;
@@ -857,12 +933,12 @@ static uint16_t ad_appearance(const uint8_t *ad, uint8_t len)
 	return 0;
 }
 
-/* a keyboard, a mouse, or something with the HID service */
+/* a keyboard, a mouse, a gamepad, or something with the HID service */
 static bool ad_is_hid(const uint8_t *ad, uint8_t len)
 {
 	if (ad_data_contains_uuid16(len, ad, ORG_BLUETOOTH_SERVICE_HUMAN_INTERFACE_DEVICE)) return true;
 	uint16_t a = ad_appearance(ad, len);
-	return a == 0x03C0 || a == 0x03C1 || a == 0x03C2;
+	return a >= 0x03C0 && a <= 0x03C4;
 }
 
 static void le_advert(const uint8_t *packet)
@@ -892,6 +968,7 @@ static void le_advert(const uint8_t *packet)
 		uint16_t a = ad_appearance(ad, len);	/* (it may be in the scan response) */
 		if (a == 0x03C1) found[i].kind = BTKBD_KEYBOARD;
 		if (a == 0x03C2) found[i].kind = BTKBD_MOUSE;
+		if (a == 0x03C3 || a == 0x03C4) found[i].kind = BTKBD_GAMEPAD;
 		ad_name(ad, len, found[i].name, sizeof found[i].name);
 		return;
 	}
@@ -947,8 +1024,13 @@ static void le_disconnected(slot_t *s)
 	}
 	if (state == BTKBD_PAIRING && s == pairing_slot) {
 		code[0] = 0;
-		pairing_over(pair_saved ? (s == KBD ? "Paired: press a key on the keyboard" : "Paired: move the mouse")
-		                        : "Pairing failed: pairing mode, then try again");
+		if (pair_saved) {
+			char m[48];
+			snprintf(m, sizeof m, "Paired: %s", wake_hint(s));
+			pairing_over(m);
+		} else {
+			pairing_over("Pairing failed: pairing mode, then try again");
+		}
 		return;
 	}
 	if (state == BTKBD_IDLE) idle_status();
@@ -996,7 +1078,7 @@ static void on_stall(btstack_timer_source_t *t)
 	trace_mark(0xBB);			/* (in the trace: BB, we hung up on a stall) */
 	if (s->cid) { hid_host_disconnect(s->cid); s->cid = 0; }
 	gap_disconnect(s->stall_handle);
-	set_status(s == KBD ? "Press a key on the keyboard again" : "Move the mouse again");
+	snprintf(status, sizeof status, "Now %s again", wake_hint(s));
 }
 
 static void watch_for_stall(hci_con_handle_t h)
@@ -1038,8 +1120,8 @@ static void packet_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint
 	case BTSTACK_EVENT_STATE:
 		if (btstack_event_state_get_state(packet) != HCI_STATE_WORKING) break;
 		idle_status();
-		try_paired(KBD);
-		if (!KBD->cid) try_paired(MOUSE);	/* (else on the next retry: one at a time) */
+		for (int i = 0; i < NSLOT; i++)	/* the first paired one; the rest on the retries, one at a time */
+			if (slots[i].paired && !slots[i].le) { try_paired(&slots[i]); break; }
 		le_wait();
 		break;
 
@@ -1054,8 +1136,10 @@ static void packet_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint
 		bd_addr_copy(found[i].addr, addr);
 		found[i].psrm = gap_event_inquiry_result_get_page_scan_repetition_mode(packet);
 		found[i].clock = gap_event_inquiry_result_get_clock_offset(packet);
-		/* a keyboard (or one with a trackpad too), a mouse, or neither */
-		found[i].kind = (cod & 0xC0) == 0x80 ? BTKBD_MOUSE : (cod & 0x40) ? BTKBD_KEYBOARD : -1;
+		/* a keyboard (or one with a trackpad too), a mouse, a joystick or
+		   gamepad, or none of them */
+		found[i].kind = (cod & 0xC0) == 0x80 ? BTKBD_MOUSE : (cod & 0x40) ? BTKBD_KEYBOARD
+		              : ((cod >> 2) & 0x0F) == 1 || ((cod >> 2) & 0x0F) == 2 ? BTKBD_GAMEPAD : -1;
 		found[i].named = gap_event_inquiry_result_get_name_available(packet);
 		if (found[i].named) {
 			int n = gap_event_inquiry_result_get_name_len(packet);
@@ -1149,8 +1233,8 @@ static void packet_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint
 	/* pairing */
 	case HCI_EVENT_PIN_CODE_REQUEST:		/* an older keyboard: type the PIN on it */
 		hci_event_pin_code_request_get_bd_addr(packet, addr);
-		if (state == BTKBD_PAIRING && pairing_slot == MOUSE) {
-			gap_pin_code_response(addr, "0000");	/* an older mouse: always this */
+		if (state == BTKBD_PAIRING && pairing_slot != KBD) {
+			gap_pin_code_response(addr, "0000");	/* an older mouse or gamepad: always this */
 			break;
 		}
 		snprintf(code, sizeof code, "%04u", (unsigned)(get_rand_32() % 10000));
@@ -1210,7 +1294,9 @@ static void packet_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint
 				code[0] = 0;
 				if (pairing) {
 					if (pair_saved) {	/* paired, but not connected yet: it will come back, or we'll try again */
-						pairing_over(s == KBD ? "Paired: press a key on the keyboard" : "Paired: move the mouse");
+						char m[48];
+						snprintf(m, sizeof m, "Paired: %s", wake_hint(s));
+						pairing_over(m);
 						btstack_run_loop_remove_timer(&retry_timer);
 						btstack_run_loop_set_timer(&retry_timer, 8000);	/* give it time to call back first */
 						btstack_run_loop_add_timer(&retry_timer);
@@ -1318,10 +1404,10 @@ void btkbd_poll(void)
 btkbd_state_t btkbd_device_state(btkbd_device_t d)
 {
 	if (state != BTKBD_IDLE) return state;
-	slot_t *s = &slots[d & 1];
+	slot_t *s = slot_of(d);
 	return s->connected ? BTKBD_CONNECTED : s->paired ? BTKBD_WAITING : BTKBD_IDLE;
 }
-const char *btkbd_device_name(btkbd_device_t d) { slot_t *s = &slots[d & 1]; return s->paired ? s->name : ""; }
+const char *btkbd_device_name(btkbd_device_t d) { slot_t *s = slot_of(d); return s->paired ? s->name : ""; }
 btkbd_state_t btkbd_state(void) { return btkbd_device_state(BTKBD_KEYBOARD); }
 const char *btkbd_status(void) { return status; }
 const char *btkbd_name(void) { return btkbd_device_name(BTKBD_KEYBOARD); }
@@ -1352,7 +1438,7 @@ void btkbd_pair_as(int i, btkbd_device_t d)
 {
 	if (i < 0 || i >= n_found || state == BTKBD_PAIRING) return;
 	lock();
-	pairing_slot = &slots[d & 1];
+	pairing_slot = slot_of(d);
 	pair_tries = 0;
 	if (state == BTKBD_SEARCHING) {		/* finish the search first, then pair */
 		pair_after_search = i;
@@ -1366,7 +1452,8 @@ void btkbd_pair_as(int i, btkbd_device_t d)
 
 void btkbd_pair(int i)
 {
-	btkbd_pair_as(i, btkbd_found_kind(i) == BTKBD_MOUSE ? BTKBD_MOUSE : BTKBD_KEYBOARD);
+	int k = btkbd_found_kind(i);
+	btkbd_pair_as(i, k == BTKBD_MOUSE || k == BTKBD_GAMEPAD ? (btkbd_device_t)k : BTKBD_KEYBOARD);
 }
 
 static void on_pair_again(btstack_timer_source_t *t)
@@ -1429,7 +1516,7 @@ static void start_pairing(int i)
 
 void btkbd_forget_device(btkbd_device_t d)
 {
-	slot_t *s = &slots[d & 1];
+	slot_t *s = slot_of(d);
 	lock();
 	if (s->cid) { hid_host_disconnect(s->cid); s->cid = 0; }
 	if (le_connecting == s || le_mode == LE_WAITING) le_stop();	/* (le_wait() starts again if the other wants it) */

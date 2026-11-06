@@ -2,7 +2,7 @@
 
 Small pieces for programs on the ClockworkPi **PicoCalc** with an RP2350
 (Pico 2 / Pico 2 W) and UF2 Loader: Shift+F5 screenshots for PDCurses
-programs, a file picker, JPEG/PNG/BMP decoders, a Bluetooth keyboard and mouse, and a
+programs, a file picker, JPEG/PNG/BMP decoders, a Bluetooth keyboard, mouse and gamepad, and a
 header for the shell's clock.
 
 They came out of porting Empire, Colossal Cave Adventure and VirtualT
@@ -17,7 +17,7 @@ word processor.
 | [`screenshot/`](screenshot/) | Shift+F5 screenshots (BMP) for PDCurses programs on the PicoCalc |
 | [`nes/`](nes/) | A ready-made build of the ShapoNES NES emulator for the PicoCalc |
 | [`picker/`](picker/) | A file picker: lists a folder, moves around the card, returns the file chosen, with an optional banner and preview panel |
-| [`bluetooth/`](bluetooth/) | A Bluetooth keyboard and mouse for programs on a Pico 2 W, and **btpair**, which pairs them: the keyboard's keys come through the normal keyboard reads, so most programs need only one line |
+| [`bluetooth/`](bluetooth/) | A Bluetooth keyboard, mouse and gamepad for programs on a Pico 2 W, and **btpair**, which pairs them: the keyboard's keys come through the normal keyboard reads, so most programs need only one line |
 | [`images/`](images/) | JPEG, PNG and BMP decoders that fit a picture to a frame, plus a PC harness for testing them |
 | [`HOWTO.md`](HOWTO.md) | How to use the picker and the decoders in your own program, with an example |
 

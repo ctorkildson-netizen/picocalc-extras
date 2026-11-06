@@ -1,6 +1,6 @@
-# Bluetooth keyboards and mice for the PicoCalc
+# Bluetooth keyboards, mice and gamepads for the PicoCalc
 
-A Bluetooth keyboard, and a mouse beside it, for programs on the
+A Bluetooth keyboard, and a mouse and a gamepad beside it, for programs on the
 ClockworkPi **PicoCalc** with a **Pico 2 W** (the one with the radio). Pair
 them once with **btpair**; from then on, any program built with this code
 connects to them by itself, and the keyboard's keys work alongside the
@@ -35,7 +35,7 @@ files are what to send with a report: the log opens in
 [Wireshark](https://www.wireshark.org/), which shows each message in full.
 
 The pairings are kept on the SD card, in `/bluetooth/pairing.dat`, so every
-program finds the same keyboard and mouse. A program connects when you press a key on
+program finds the same keyboard, mouse and gamepad. A program connects when you press a key on
 the keyboard, or within a few seconds of starting if the keyboard is
 already awake.
 
@@ -70,6 +70,15 @@ Tried so far: the Logitech M720 (BLE).
 
 A keyboard's own trackpad comes through as a mouse too, without pairing
 anything else.
+
+## Pairing a gamepad
+
+Press **G** in btpair. Most gamepads go into pairing mode when you hold a
+pairing or sync button (or Start with another button) until the lights
+blink quickly; some, like 8BitDo's, have a mode for each kind of machine,
+and the Windows or Android one is the one to use. The gamepad is kept
+beside the keyboard and the mouse, in a place of its own, and btpair's
+first page shows its sticks and buttons live once it's connected.
 
 **If a BLE keyboard stops connecting:** most of them choose a new identity
 each time they're put into pairing mode, so the PicoCalc no longer knows
@@ -107,7 +116,30 @@ the Bluetooth keyboard with `btkbd_read()`.
 
 The mouse: `btkbd_mouse(&dx, &dy, &wheel, &buttons)` gives how far it has
 moved since the last call, and the buttons held now (bit 0 left, 1 right,
-2 middle); it returns true if anything changed. See [btkbd.h](btkbd.h) for
+2 middle); it returns true if anything changed.
+
+The gamepad: `btkbd_gamepad(&pad)` fills in a `btkbd_pad_t` with how it is
+now, and returns true if a report has come since the last call:
+
+| Field | |
+| --- | --- |
+| `buttons` | bit 0 is button 1, and so on (up to 32) |
+| `x`, `y` | the left stick, −127 to 127, 0 in the middle |
+| `z`, `rz` | the right stick on most gamepads |
+| `rx`, `ry` | the right stick on some (they're named as HID numbers them) |
+| `brake`, `gas` | analogue triggers that report as these, 0 to 255 |
+| `hat` | the D-pad: −1 when it isn't pressed, 0 up, 1 up-right, round to 7 up-left |
+
+Which button is which number, and where the right stick and triggers turn
+up, differ from one make to another, so a game does best to let the player
+choose. A gamepad that isn't connected reads as all zero, with `hat` −1.
+
+**`pairing.dat`** has a record for each device, tagged `KBD0`/`KBL0` for the
+keyboard (classic/BLE), `PTR0`/`PTL0` for the mouse and `GPD0`/`GPL0` for
+the gamepad: the 6-byte address, for BLE then its address type, then the
+name. (The file is still `PBK2`; older programs ignore the new tags.)
+
+See [btkbd.h](btkbd.h) for
 the rest: each device's state and name, and the search and pairing calls
 btpair uses.
 

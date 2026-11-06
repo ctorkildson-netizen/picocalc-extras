@@ -18,6 +18,7 @@
  *
  * A Bluetooth mouse can be paired too, alongside the keyboard: btkbd_mouse()
  * gives its movement. (A keyboard's own trackpad comes out of it as well.)
+ * And a gamepad, alongside both: btkbd_gamepad() gives its sticks and buttons.
  *
  * Both kinds of keyboard work: "classic" Bluetooth ones, and Bluetooth Low
  * Energy (BLE) ones, which speak HID over GATT.
@@ -26,7 +27,7 @@
  * program; other programs only reconnect, and needn't call btkbd_poll().
  *
  * The pairings are kept on the SD card, in /bluetooth/pairing.dat, so every
- * program that uses this finds the same keyboard and mouse.
+ * program that uses this finds the same keyboard, mouse and gamepad.
  *
  *     btkbd_init();                  // after fs_init() (or picocalc_init())
  *     ...then read the keyboard as usual
@@ -48,7 +49,17 @@ typedef enum {
 	BTKBD_CONNECTED,
 } btkbd_state_t;
 
-typedef enum { BTKBD_KEYBOARD, BTKBD_MOUSE } btkbd_device_t;
+typedef enum { BTKBD_KEYBOARD, BTKBD_MOUSE, BTKBD_GAMEPAD } btkbd_device_t;
+
+/* a gamepad (or joystick) as it is now */
+typedef struct {
+	uint32_t buttons;		/* bit 0 is button 1, and so on (up to 32) */
+	int8_t x, y;			/* the left stick: -127..127, 0 in the middle, */
+	int8_t z, rz;			/*   the right stick on most gamepads, */
+	int8_t rx, ry;			/*   or here on some (as HID numbers them) */
+	uint8_t brake, gas;		/* triggers that report as these: 0..255 */
+	int8_t hat;			/* the D-pad: -1 none, 0 up, 1 up-right, ... 7 up-left */
+} btkbd_pad_t;
 
 /* start the radio; reconnects to the keyboard paired before, if any */
 bool btkbd_init(void);
@@ -73,13 +84,19 @@ const char *btkbd_device_name(btkbd_device_t d);
    anything changed */
 bool btkbd_mouse(int *dx, int *dy, int *wheel, int *buttons);
 
-/* pairing: search for keyboards and mice in pairing mode (about 10 seconds) */
+/* the gamepad, as it is now (all zero, hat -1, when none is connected); true
+   if a report has come from it since the last call. Which button is which
+   number, and which axes the right stick uses, varies from one make to
+   another: a program can let the player choose. */
+bool btkbd_gamepad(btkbd_pad_t *pad);
+
+/* pairing: search for keyboards, mice and gamepads in pairing mode (about 10 seconds) */
 void btkbd_search(void);
 int btkbd_found(void);			/* how many found so far */
 const char *btkbd_found_name(int i);
 bool btkbd_found_le(int i);		/* a Bluetooth Low Energy one */
-int btkbd_found_kind(int i);		/* what it says it is: BTKBD_KEYBOARD, BTKBD_MOUSE, or -1 */
-/* pair it as the keyboard or the mouse, replacing the one before */
+int btkbd_found_kind(int i);		/* what it says it is: BTKBD_KEYBOARD, _MOUSE, _GAMEPAD, or -1 */
+/* pair it as the keyboard, the mouse or the gamepad, replacing the one before */
 void btkbd_pair_as(int i, btkbd_device_t d);
 void btkbd_pair(int i);			/* as what it says it is (a keyboard if it doesn't say) */
 /* while pairing: what to type on the keyboard (then Enter), or NULL */
@@ -95,7 +112,7 @@ const uint8_t *btkbd_log(size_t *len, uint32_t *lost);
 /* for testing: how many mouse reports have come, the movement added up
    since the start, and the buttons held now */
 void btkbd_pointer(unsigned *reports, int *x, int *y, int *wheel, int *buttons);
-/* forget the paired keyboard, or either */
+/* forget the paired keyboard, or any one of them */
 void btkbd_forget(void);
 void btkbd_forget_device(btkbd_device_t d);
 
