@@ -21,6 +21,8 @@
 #include "pico/btstack_run_loop_async_context.h"
 #include "pico/btstack_hci_transport_cyw43.h"
 #include "classic/btstack_link_key_db_tlv.h"
+#include "classic/sdp_server.h"
+#include "classic/device_id_server.h"
 #include "ble/le_device_db_tlv.h"
 #include "drivers/filesystem.h"
 #include "drivers/keyboard.h"
@@ -1352,6 +1354,13 @@ bool btkbd_init(void)
 	hci_dump_enable_packet_log(true);
 	load_paired();
 	l2cap_init();
+	/* a service directory (SDP), with just a Device ID: a PS4 pad looks the
+	   PicoCalc up there before it reconnects, and hangs up if there's none */
+	static uint8_t device_id[100];
+	sdp_init();
+	device_id_create_sdp_record(device_id, sdp_create_service_record_handle(),
+	                            DEVICE_ID_VENDOR_ID_SOURCE_USB, 0x2E8A, 0x0000, 0x0100);	/* Raspberry Pi */
+	sdp_register_service(device_id);
 	hid_host_init(descriptor, sizeof descriptor);
 	/* BLE: pairing (we show a code, the keyboard types it), and a small
 	   GATT server of our own, as some keyboards ask the PicoCalc its name */
