@@ -700,6 +700,25 @@ static void parse_report(slot_t *s, const uint8_t *desc, uint16_t desc_len, cons
 	if (gamepad) { pad = g; pad_reports++; }
 }
 
+unsigned btkbd_gamepad_reports(void) { return pad_reports; }
+
+/* ask for the gamepad's link to be in sniff mode, the radio waking every ms
+   milliseconds (0: always awake): fewer reports, less work for the Pico */
+bool btkbd_gamepad_sniff(int ms)
+{
+	slot_t *s = &slots[BTKBD_GAMEPAD];
+	if (!s->connected || s->le) return false;
+	lock();
+	hci_connection_t *c = hci_connection_for_bd_addr_and_type(s->addr, BD_ADDR_TYPE_ACL);
+	uint8_t err = ERROR_CODE_UNKNOWN_CONNECTION_IDENTIFIER;
+	if (c) {
+		uint16_t slots_ = (uint16_t)(ms * 8 / 5) & ~1u;		/* in 0.625 ms slots, even */
+		err = ms ? gap_sniff_mode_enter(c->con_handle, slots_, slots_, 1, 0) : gap_sniff_mode_exit(c->con_handle);
+	}
+	unlock();
+	return err == ERROR_CODE_SUCCESS;
+}
+
 bool btkbd_gamepad(btkbd_pad_t *p)
 {
 	static unsigned took;

@@ -89,6 +89,12 @@ bool btkbd_mouse(int *dx, int *dy, int *wheel, int *buttons);
    number, and which axes the right stick uses, varies from one make to
    another: a program can let the player choose. */
 bool btkbd_gamepad(btkbd_pad_t *pad);
+/* how many reports have come from the gamepad since starting */
+unsigned btkbd_gamepad_reports(void);
+/* the gamepad's link in sniff mode: the radio wakes every ms milliseconds
+   (0: always), so a gamepad that reports very often can't send more than
+   that; false if it couldn't be asked (none connected) */
+bool btkbd_gamepad_sniff(int ms);
 
 /* pairing: search for keyboards, mice and gamepads in pairing mode (about 10 seconds) */
 void btkbd_search(void);
