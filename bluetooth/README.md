@@ -80,6 +80,9 @@ and the Windows or Android one is the one to use. The gamepad is kept
 beside the keyboard and the mouse, in a place of its own, and btpair's
 first page shows its sticks and buttons live once it's connected.
 
+After that, pressing the gamepad's home button (PS on a PS4 pad) wakes it
+and it connects by itself.
+
 **If a BLE keyboard stops connecting:** most of them choose a new identity
 each time they're put into pairing mode, so the PicoCalc no longer knows
 them. Pair it again in btpair.
@@ -133,6 +136,13 @@ now, and returns true if a report has come since the last call:
 Which button is which number, and where the right stick and triggers turn
 up, differ from one make to another, so a game does best to let the player
 choose. A gamepad that isn't connected reads as all zero, with `hat` −1.
+
+A gamepad is held to 125 reports a second: its link goes into Bluetooth's
+sniff mode, the radio waking every 8 ms. Left alone, a PS4 pad reports
+hundreds of times a second, over a thousand when it's busy, and taking
+every one left the NES emulator too little time. `btkbd_gamepad_sniff(ms)`
+changes the 8 ms; 0 lets the gamepad report as often as it likes.
+`btkbd_gamepad_reports()` counts the reports that have come.
 
 **`pairing.dat`** has a record for each device, tagged `KBD0`/`KBL0` for the
 keyboard (classic/BLE), `PTR0`/`PTL0` for the mouse and `GPD0`/`GPL0` for
