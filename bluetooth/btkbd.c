@@ -728,7 +728,6 @@ static void on_sniff(btstack_timer_source_t *t)
 	if (pad_sniff_ms) apply_sniff();
 }
 
-unsigned btkbd_gamepad_reports(void) { return pad_reports; }
 
 bool btkbd_gamepad_sniff(int ms)
 {
