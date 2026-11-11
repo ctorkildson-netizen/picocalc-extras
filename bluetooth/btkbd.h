@@ -91,9 +91,11 @@ bool btkbd_mouse(int *dx, int *dy, int *wheel, int *buttons);
 bool btkbd_gamepad(btkbd_pad_t *pad);
 /* how many reports have come from the gamepad since starting */
 unsigned btkbd_gamepad_reports(void);
-/* the gamepad's link in sniff mode: the radio wakes every ms milliseconds
-   (0: always), so a gamepad that reports very often can't send more than
-   that; false if it couldn't be asked (none connected) */
+/* how often the gamepad may report: its link goes into sniff mode, the
+   radio waking every ms milliseconds. It's 8 (125 a second) unless changed;
+   0 lets it report as often as it likes, which can be over a thousand times
+   a second and slow a busy program down. False if none is connected now (it
+   takes effect when one connects). */
 bool btkbd_gamepad_sniff(int ms);
 
 /* pairing: search for keyboards, mice and gamepads in pairing mode (about 10 seconds) */
