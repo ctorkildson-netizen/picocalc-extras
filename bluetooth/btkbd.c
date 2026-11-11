@@ -21,6 +21,8 @@
 #include "pico/btstack_run_loop_async_context.h"
 #include "pico/btstack_hci_transport_cyw43.h"
 #include "classic/btstack_link_key_db_tlv.h"
+#include "classic/sdp_server.h"
+#include "classic/device_id_server.h"
 #include "ble/le_device_db_tlv.h"
 #include "drivers/filesystem.h"
 #include "drivers/keyboard.h"
@@ -698,6 +700,45 @@ static void parse_report(slot_t *s, const uint8_t *desc, uint16_t desc_len, cons
 	if (gamepad) { pad = g; pad_reports++; }
 }
 
+unsigned btkbd_gamepad_reports(void) { return pad_reports; }
+
+/* The gamepad's link in sniff mode: the radio wakes every pad_sniff_ms
+   milliseconds, so the gamepad can't report more often than that. A PS4 pad
+   otherwise sends hundreds of reports a second -- over a thousand when it's
+   busy -- and the Pico has to take every one, which leaves an emulator
+   running on the same core too little time (seen in the NES port). 8 ms is
+   125 reports a second, plenty for any game. */
+static int pad_sniff_ms = 8;
+static btstack_timer_source_t sniff_timer;
+
+static bool apply_sniff(void)		/* (with the lock held) */
+{
+	slot_t *s = &slots[BTKBD_GAMEPAD];
+	if (!s->connected || s->le) return false;
+	hci_connection_t *c = hci_connection_for_bd_addr_and_type(s->addr, BD_ADDR_TYPE_ACL);
+	if (!c) return false;
+	uint16_t n = (uint16_t)(pad_sniff_ms * 8 / 5) & ~1u;		/* in 0.625 ms slots, even */
+	uint8_t err = pad_sniff_ms ? gap_sniff_mode_enter(c->con_handle, n, n, 1, 0) : gap_sniff_mode_exit(c->con_handle);
+	return err == ERROR_CODE_SUCCESS;
+}
+
+static void on_sniff(btstack_timer_source_t *t)
+{
+	(void)t;
+	if (pad_sniff_ms) apply_sniff();
+}
+
+
+bool btkbd_gamepad_sniff(int ms)
+{
+	lock();
+	if (pad_sniff_ms && ms) { pad_sniff_ms = 0; apply_sniff(); }	/* (out first, to change it) */
+	pad_sniff_ms = ms;
+	bool ok = apply_sniff();
+	unlock();
+	return ok;
+}
+
 bool btkbd_gamepad(btkbd_pad_t *p)
 {
 	static unsigned took;
@@ -1312,6 +1353,11 @@ static void packet_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint
 			code[0] = 0;
 			if (pairing && pairing_with >= 0) save_paired(s, addr, found[pairing_with].name, false, 0);
 			s->connected = true;
+			if (s == &slots[BTKBD_GAMEPAD] && pad_sniff_ms) {	/* a moment after it settles */
+				btstack_run_loop_set_timer_handler(&sniff_timer, on_sniff);
+				btstack_run_loop_set_timer(&sniff_timer, 1000);
+				btstack_run_loop_add_timer(&sniff_timer);
+			}
 			if (pairing) pairing_over(NULL);
 			else if (state == BTKBD_IDLE) idle_status();
 			break;
@@ -1352,6 +1398,13 @@ bool btkbd_init(void)
 	hci_dump_enable_packet_log(true);
 	load_paired();
 	l2cap_init();
+	/* a service directory (SDP), with just a Device ID: a PS4 pad looks the
+	   PicoCalc up there before it reconnects, and hangs up if there's none */
+	static uint8_t device_id[100];
+	sdp_init();
+	device_id_create_sdp_record(device_id, sdp_create_service_record_handle(),
+	                            DEVICE_ID_VENDOR_ID_SOURCE_USB, 0x2E8A, 0x0000, 0x0100);	/* Raspberry Pi */
+	sdp_register_service(device_id);
 	hid_host_init(descriptor, sizeof descriptor);
 	/* BLE: pairing (we show a code, the keyboard types it), and a small
 	   GATT server of our own, as some keyboards ask the PicoCalc its name */

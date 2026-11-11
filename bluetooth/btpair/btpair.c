@@ -16,7 +16,7 @@
 #include "picocalc_shell.h"
 #include "btkbd.h"
 
-#define VERSION "2.2"
+#define VERSION "2.2.1"
 #define COLS 40
 #define SCREEN_ROWS 32
 #define C_TEXT 0xC618		/* light grey */
