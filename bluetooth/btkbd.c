@@ -1392,7 +1392,10 @@ static void unlock(void) { async_context_release_lock(cyw43_arch_async_context()
 
 bool btkbd_init(void)
 {
-	if (cyw43_arch_init()) { state = BTKBD_OFF; set_status("Bluetooth didn't start"); return false; }
+	/* (a program using Wi-Fi as well may have started the radio already) */
+	if (!cyw43_is_initialized(&cyw43_state) && cyw43_arch_init()) {
+		state = BTKBD_OFF; set_status("Bluetooth didn't start"); return false;
+	}
 	lock();
 	hci_dump_init(&smp_dump);
 	hci_dump_enable_packet_log(true);

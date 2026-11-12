@@ -61,7 +61,8 @@ typedef struct {
 	int8_t hat;			/* the D-pad: -1 none, 0 up, 1 up-right, ... 7 up-left */
 } btkbd_pad_t;
 
-/* start the radio; reconnects to the keyboard paired before, if any */
+/* start the radio (unless the program has: one using Wi-Fi too starts it
+   first, with its country); reconnects to the keyboard paired before, if any */
 bool btkbd_init(void);
 /* save a new pairing to the card: call it now and then while pairing */
 void btkbd_poll(void);

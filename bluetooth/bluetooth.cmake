@@ -9,15 +9,28 @@
 #
 # The program's include path must reach the drivers as "drivers/keyboard.h"
 # etc. This brings BTstack's settings (btstack_config.h) with it.
+#
+# A program that also uses Wi-Fi (lwIP) sets BTKBD_WITH_WIFI before the
+# include, and starts the radio itself (cyw43_arch_init_with_country(), say)
+# before btkbd_init(), which then leaves it as it is:
+#
+#   set(BTKBD_WITH_WIFI ON)
+#   include(path/to/bluetooth/bluetooth.cmake)
+#   # (the program supplies lwipopts.h)
 add_library(picocalc_btkbd INTERFACE)
 target_sources(picocalc_btkbd INTERFACE ${CMAKE_CURRENT_LIST_DIR}/btkbd.c)
 target_include_directories(picocalc_btkbd INTERFACE ${CMAKE_CURRENT_LIST_DIR})
-target_compile_definitions(picocalc_btkbd INTERFACE CYW43_LWIP=0)
 # classic Bluetooth and BLE over the CYW43, run in the background (an interrupt);
 # btkbd.c supplies btstack_cyw43_init() (pairings on the SD card, not in
 # flash), so pico_btstack_cyw43 isn't linked
+if (BTKBD_WITH_WIFI)
+    set(BTKBD_ARCH pico_cyw43_arch_lwip_threadsafe_background)
+else()
+    set(BTKBD_ARCH pico_cyw43_arch_threadsafe_background)
+    target_compile_definitions(picocalc_btkbd INTERFACE CYW43_LWIP=0)
+endif()
 target_link_libraries(picocalc_btkbd INTERFACE
-    pico_rand pico_cyw43_arch_threadsafe_background
+    pico_rand ${BTKBD_ARCH}
     pico_btstack_base pico_btstack_classic pico_btstack_ble
     pico_btstack_hci_transport_cyw43 pico_btstack_run_loop_async_context)
 # the Bluetooth keyboard's keys come out of sb_read_keyboard() too
