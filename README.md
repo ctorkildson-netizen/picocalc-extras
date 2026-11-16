@@ -19,7 +19,50 @@ word processor.
 | [`picker/`](picker/) | A file picker: lists a folder, moves around the card, returns the file chosen, with an optional banner and preview panel |
 | [`bluetooth/`](bluetooth/) | A Bluetooth keyboard, mouse and gamepad for programs on a Pico 2 W, and **btpair**, which pairs them: the keyboard's keys come through the normal keyboard reads, so most programs need only one line |
 | [`images/`](images/) | JPEG, PNG and BMP decoders that fit a picture to a frame, plus a PC harness for testing them |
+| [`fatfs/`](fatfs/) | The SD card's file system (ChaN's FatFs from the Pico SDK) built the way Blair Leduc's picocalc-text-starter wants it, as one CMake library |
 | [`HOWTO.md`](HOWTO.md) | How to use the picker and the decoders in your own program, with an example |
+
+## Using a piece in your program
+
+Add the repository as a git submodule, pinned to a release, then bring in
+the piece you want with a line or two of CMake. For a Bluetooth keyboard,
+in a program built on Blair Leduc's
+[picocalc-text-starter](https://github.com/BlairLeduc/picocalc-text-starter)
+drivers:
+
+```sh
+git submodule add https://github.com/ctorkildson-netizen/picocalc-extras modules/picocalc-extras
+git -C modules/picocalc-extras checkout v2.2.1     # the latest release
+```
+
+```cmake
+set(PICO_BOARD pico2_w)                            # before pico_sdk_init()
+include(modules/picocalc-extras/bluetooth/bluetooth.cmake)
+target_link_libraries(myprogram picocalc_btkbd ...)
+```
+
+```c
+#include "btkbd.h"
+fs_init();       /* the SD card first: the pairings are kept on it */
+btkbd_init();    /* then the Bluetooth keyboard's keys come through sb_read_keyboard() */
+```
+
+Each piece's README has a "Using it in a program" section like this, and
+says what it needs. In general the pieces assume:
+
+- an RP2350 PicoCalc (Pico 2 or Pico 2 W; Bluetooth needs the W), with
+  programs started from UF2 Loader or Blair Leduc's
+  [shell](https://github.com/BlairLeduc/picocalc-shell);
+- the Pico SDK 2.2 or later; Bluetooth needs the SDK's `develop` branch,
+  whose BTstack has the host for BLE keyboards;
+- for `bluetooth/` and `fatfs/`, picocalc-text-starter's drivers (v0.17 or
+  later) in the program.
+
+Programs that use these: [calcterm](https://github.com/ctorkildson-netizen/calcterm)
+(a VT100 terminal), [Diamond](https://github.com/ctorkildson-netizen/diamond),
+the [picture viewer](https://github.com/ctorkildson-netizen/picocalc-viewer),
+and the PicoCalc port of [ShapoNES](https://github.com/ctorkildson-netizen/shapones/tree/picocalc-port/samples/picocalc).
+They're worked examples to copy from.
 
 Everything here is MIT-licensed (see [LICENSE](LICENSE)), except the build in
 `nes/`, which is Shapoco's ShapoNES, shared with his permission, and the
