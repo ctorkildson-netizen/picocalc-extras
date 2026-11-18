@@ -32,7 +32,7 @@ drivers:
 
 ```sh
 git submodule add https://github.com/ctorkildson-netizen/picocalc-extras modules/picocalc-extras
-git -C modules/picocalc-extras checkout v2.2.1     # the latest release
+git -C modules/picocalc-extras checkout v2.3     # the latest release
 ```
 
 ```cmake
