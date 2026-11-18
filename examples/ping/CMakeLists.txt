@@ -36,7 +36,7 @@ pico_set_program_name(ping "ping")
 pico_set_program_version(ping "1.0")
 pico_enable_stdio_uart(ping 0)
 pico_enable_stdio_usb(ping 0)
-target_compile_definitions(ping PRIVATE CYW43_HOST_NAME="picocalc-ping" NET_PING_DEBUG)
+target_compile_definitions(ping PRIVATE CYW43_HOST_NAME="picocalc-ping")
 target_link_libraries(ping picocalc_net picocalc_fs
     pico_stdlib pico_status_led hardware_gpio hardware_i2c hardware_spi hardware_pio
     hardware_clocks hardware_powman)

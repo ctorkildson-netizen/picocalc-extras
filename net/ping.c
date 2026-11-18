@@ -23,10 +23,6 @@
 
 static volatile bool got;
 static uint16_t seq;
-#ifdef NET_PING_DEBUG
-static volatile unsigned seen; static volatile uint8_t l_type; static volatile uint16_t l_id, l_seq;
-static err_t l_err;
-#endif
 
 static u8_t on_reply(void *arg, struct raw_pcb *pcb, struct pbuf *p, const ip_addr_t *from)
 {
@@ -38,9 +34,6 @@ static u8_t on_reply(void *arg, struct raw_pcb *pcb, struct pbuf *p, const ip_ad
 	u16_t hl = (u16_t)((vhl & 0x0f) * 4);
 	struct icmp_echo_hdr e;
 	if (pbuf_copy_partial(p, &e, sizeof e, hl) != sizeof e) return 0;
-#ifdef NET_PING_DEBUG
-	seen++; l_type = e.type; l_id = lwip_ntohs(e.id); l_seq = lwip_ntohs(e.seqno);
-#endif
 	if (e.type != ICMP_ER || e.id != lwip_htons(PING_ID) || e.seqno != lwip_htons(seq)) return 0;
 	got = true;
 	pbuf_free(p);
@@ -62,9 +55,6 @@ static bool send_one(struct raw_pcb *pcb, const ip_addr_t *ip)
 	for (int i = 0; i < PING_DATA; i++) d[i] = (uint8_t)('a' + i % 26);
 	e->chksum = inet_chksum(e, (u16_t)len);
 	err_t r = raw_sendto(pcb, p, ip);
-#ifdef NET_PING_DEBUG
-	l_err = r;
-#endif
 	pbuf_free(p);
 	return r == ERR_OK;
 }
@@ -106,10 +96,5 @@ bool net_ping(const char *host, unsigned timeout_ms, unsigned *ms, net_progress 
 	if (got) { if (ms) *ms = took; return true; }
 	if (!sent) snprintf(why, n, "Couldn't send to %.40s", ipaddr_ntoa(&ip));
 	else snprintf(why, n, "No reply from %.40s in %u ms", ipaddr_ntoa(&ip), timeout_ms);
-#ifdef NET_PING_DEBUG
-	size_t k = strlen(why);
-	snprintf(why + k, n - k, " [sent %d seq %u; ICMP in %u, last type %u id %04x seq %u]",
-		 (int)l_err, seq, seen, l_type, l_id, l_seq);
-#endif
 	return false;
 }

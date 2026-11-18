@@ -49,7 +49,7 @@ int main(void)
 	picocalc_init();
 	printf("ping (picocalc-extras net/)\n");
 
-	char why[160];
+	char why[96];
 	if (!net_join(dots, NULL, why, sizeof why)) {
 		printf("\n%s\n\nPress a key to go back.", why);
 		getchar();
@@ -60,7 +60,9 @@ int main(void)
 
 	char host[64] = "", line[64];
 	for (;;) {
-		printf("\nPing (Enter: %s, q: quit): ", host[0] ? host : "nothing yet");
+		if (host[0]) printf("\nEnter: %s again, q: quit\n", host);
+		else printf("\nAn address or name to ping, q: quit\n");
+		printf("> ");
 		readline(line, sizeof line);
 		if (!strcmp(line, "q") || !strcmp(line, "Q")) break;
 		if (line[0]) snprintf(host, sizeof host, "%s", line);
