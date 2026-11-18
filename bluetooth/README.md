@@ -117,6 +117,27 @@ keyboard, gets both keyboards with no other changes.
 To tell the two keyboards apart instead, call `btkbd_merge(false)` and read
 the Bluetooth keyboard with `btkbd_read()`.
 
+### With Wi-Fi as well
+
+Bluetooth and Wi-Fi share the Pico 2 W's one radio, and both work at once.
+A program that uses Wi-Fi (lwIP) too sets `BTKBD_WITH_WIFI` before the
+include, supplies its own `lwipopts.h`, and starts the radio itself, with
+its country, before `btkbd_init()`, which then leaves the radio as it is:
+
+```cmake
+set(BTKBD_WITH_WIFI ON)
+include(path/to/bluetooth/bluetooth.cmake)
+```
+
+```c
+cyw43_arch_init_with_country(CYW43_COUNTRY_USA);   // the program's radio
+cyw43_arch_enable_sta_mode();                      // (when it wants Wi-Fi)
+btkbd_init();                                      // Bluetooth on the same radio
+```
+
+[calcterm](https://github.com/ctorkildson-netizen/calcterm) does this:
+telnet over Wi-Fi with a Bluetooth keyboard.
+
 The mouse: `btkbd_mouse(&dx, &dy, &wheel, &buttons)` gives how far it has
 moved since the last call, and the buttons held now (bit 0 left, 1 right,
 2 middle); it returns true if anything changed.
