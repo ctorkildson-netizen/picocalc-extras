@@ -64,6 +64,8 @@ the [picture viewer](https://github.com/ctorkildson-netizen/picocalc-viewer),
 and the PicoCalc port of [ShapoNES](https://github.com/ctorkildson-netizen/shapones/tree/picocalc-port/samples/picocalc).
 They're worked examples to copy from.
 
+Want to add a piece or fix one? See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 Everything here is MIT-licensed (see [LICENSE](LICENSE)), except the build in
 `nes/`, which is Shapoco's ShapoNES, shared with his permission, and the
 JPEG and PNG decoders that `images/` uses, which keep their own licences
