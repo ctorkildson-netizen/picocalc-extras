@@ -49,7 +49,7 @@ int main(void)
 	picocalc_init();
 	printf("ping (picocalc-extras net/)\n");
 
-	char why[96];
+	char why[160];
 	if (!net_join(dots, NULL, why, sizeof why)) {
 		printf("\n%s\n\nPress a key to go back.", why);
 		getchar();
