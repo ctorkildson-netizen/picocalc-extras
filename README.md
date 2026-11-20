@@ -2,8 +2,8 @@
 
 Small pieces for programs on the ClockworkPi **PicoCalc** with an RP2350
 (Pico 2 / Pico 2 W) and UF2 Loader: Shift+F5 screenshots for PDCurses
-programs, a file picker, JPEG/PNG/BMP decoders, a Bluetooth keyboard, mouse and gamepad, and a
-header for the shell's clock.
+programs, a file picker, JPEG/PNG/BMP decoders, a Bluetooth keyboard, mouse and gamepad, Wi-Fi
+with TCP and ping, and a header for the shell's clock.
 
 They came out of porting Empire, Colossal Cave Adventure and VirtualT
 (a TRS-80 Model 100 emulator) to the PicoCalc, and of writing its
@@ -19,6 +19,7 @@ word processor.
 | [`picker/`](picker/) | A file picker: lists a folder, moves around the card, returns the file chosen, with an optional banner and preview panel |
 | [`bluetooth/`](bluetooth/) | A Bluetooth keyboard, mouse and gamepad for programs on a Pico 2 W, and **btpair**, which pairs them: the keyboard's keys come through the normal keyboard reads, so most programs need only one line |
 | [`images/`](images/) | JPEG, PNG and BMP decoders that fit a picture to a frame, plus a PC harness for testing them |
+| [`net/`](net/) | Wi-Fi from `/ntp/ntp.cfg`, a TCP connection, name lookups and ping, for programs on a Pico 2 W, with a ping program as its example |
 | [`fatfs/`](fatfs/) | The SD card's file system (ChaN's FatFs from the Pico SDK) built the way Blair Leduc's picocalc-text-starter wants it, as one CMake library |
 | [`HOWTO.md`](HOWTO.md) | How to use the picker and the decoders in your own program, with an example |
 
