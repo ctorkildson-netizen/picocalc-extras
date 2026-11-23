@@ -77,3 +77,37 @@ if (alt && key_table[i].alt)
     return key_table[i].alt;
 return key_table[i].normal;
 ```
+
+# Screenshots for any program (lcdshot.c)
+
+`lcdshot.c` takes a screenshot of whatever is on the LCD, for any program
+on Blair Leduc's picocalc-text-starter drivers (v0.17 or later, which can
+read the LCD back with `lcd_unblit()`), curses or not.
+
+## Using it in a program
+
+1. Add `screenshot/lcdshot.c` to the program's sources, and put
+   `screenshot/` and the shell's `include/` (`picocalc_shell.h`, v1.1 or
+   later, for the clock) on its include path. It needs `picocalc_fs`
+   (`fatfs/`), and `hardware_powman` for the clock.
+2. Call it from the program's own loop when Shift+F5 comes in (the
+   keyboard BIOS sends it as F10):
+
+   ```c
+   #include "lcdshot.h"
+
+   char saved[80];
+   if (key == KEY_F10 && lcd_screenshot("myprog", saved, sizeof saved))
+       printf("Saved %s\n", saved);     // /screenshots/myprog-2026-11-23_114502.bmp
+   ```
+
+Files are 320x320 24-bit BMPs in `/screenshots`, named by date and time
+when the shell's clock is set, otherwise `myprog-001.bmp` and on. It reads
+the LCD a row at a time, so it takes a second or so; don't call it from an
+interrupt.
+
+**One limit:** the text starter's `lcd_unblit()` reads the LCD's frame
+memory without allowing for hardware scrolling (which `lcd_blit()` does
+allow for), so if the text driver has scrolled the screen the picture comes
+out rotated by the scroll. Programs that place their text themselves (with
+cursor positioning, as the FTP server does) aren't affected.
