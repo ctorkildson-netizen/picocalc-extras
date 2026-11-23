@@ -39,6 +39,12 @@ const char *net_address(void);		/* ours, once joined: "192.168.1.23" */
    program away until it runs out */
 void net_leave(void);
 
+/* the time from the NTP server in /ntp/ntp.cfg ("server = ...", or
+   pool.ntp.org), as UTC milliseconds since 1970; joins first if need be.
+   A program on the PicoCalc shell can then set the shell's clock with
+   picocalc_shell_set_time(), so files it writes get the right date. */
+bool net_time(int64_t *utc_ms, net_progress progress, void *ctx, char *why, size_t why_size);
+
 /* "192.168.1.50" or "host.example.org" to an address (joining first if a
    name has to be looked up) */
 bool net_lookup(const char *host, ip_addr_t *ip, net_progress progress, void *ctx,
