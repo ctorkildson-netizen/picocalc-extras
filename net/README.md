@@ -1,7 +1,8 @@
 # net/ -- Wi-Fi for PicoCalc programs (Pico 2 W)
 
-Joins the Wi-Fi network named in `/ntp/ntp.cfg`, and gives a program one
-TCP connection at a time, name lookups and ping. It came out of
+Joins the Wi-Fi network named in `/ntp/ntp.cfg`, and gives a program TCP
+connections (outgoing, and incoming on ports it listens on), name lookups
+and ping. It came out of
 [calcterm](https://github.com/ctorkildson-netizen/calcterm)'s telnet.
 
 The network is set up in one place on the card: `/ntp/ntp.cfg`, the file
@@ -48,6 +49,28 @@ net_leave();                                 // before the program ends
 [`net.h`](net.h) has the rest: `net_lookup()`, `net_waiting()`,
 `net_open()` and `net_closed_by_host()`.
 
+**Several connections, and listening** (a server, say): each connection is
+a `net_conn`, from a pool of `PICOCALC_NET_CONNS` (2 unless the program sets
+it in CMake before `picocalc_net()`; each takes a 16 KB receive buffer).
+
+```c
+net_listener *l = net_listen(21, NULL, NULL, why, sizeof why);   // 0: any free port
+for (;;) {
+    net_conn *c = net_accept(l);          // doesn't wait: NULL if nobody yet
+    if (c) {
+        net_conn_write(c, (const uint8_t *)"220 Hello\r\n", 11);
+        ...                               // net_conn_read(), net_conn_closed_by_host()
+        net_conn_close(c);
+    }
+    // ... the program's other work
+}
+
+net_conn *d = net_dial("192.168.1.50", 80, NULL, NULL, why, sizeof why);
+```
+
+The one-connection calls (`net_connect()`, `net_read()` ...) use a
+connection from the same pool, so they and these mix freely.
+
 **Every call waits** until it's done, calling the progress callback (if
 any) now and then with what's happening; returning false from it stops
 the wait. lwIP runs in the background meanwhile, so data that arrives
@@ -74,5 +97,11 @@ whatever you type, four times, as ping does on a PC.
 
 ## Limits
 
-- One TCP connection at a time, as a client; no listening yet.
+- Connections from a fixed pool (`PICOCALC_NET_CONNS`); a newcomer to a
+  listener when none is free is turned away.
 - IPv4 only. Names ending in `.local` aren't looked up; use the address.
+
+## Tests
+
+[`test/`](test/) runs `tcp.c` against real lwIP on a PC, over a loopback
+interface: `make check LWIP=/path/to/pico-sdk/lib/lwip`.

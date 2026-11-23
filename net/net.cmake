@@ -10,6 +10,9 @@
 # lwIP's settings come from net/config/lwipopts.h, unless the program sets
 # PICOCALC_NET_OWN_LWIPOPTS and puts its own lwipopts.h on its include path
 # (it needs LWIP_RAW 1 for ping, and a TCP_WND under 16 KB).
+#
+# Connections: 2 at once unless the program sets PICOCALC_NET_CONNS before
+# calling picocalc_net() (each takes a 16 KB receive buffer).
 set(PICOCALC_NET_DIR ${CMAKE_CURRENT_LIST_DIR})
 function(picocalc_net SHELL)
     if (TARGET picocalc_net)
@@ -23,10 +26,13 @@ function(picocalc_net SHELL)
     endif()
     add_library(picocalc_net INTERFACE)
     target_sources(picocalc_net INTERFACE
-        ${PICOCALC_NET_DIR}/net.c ${PICOCALC_NET_DIR}/ping.c ${SHELL}/src/core/ntp.c)
+        ${PICOCALC_NET_DIR}/net.c ${PICOCALC_NET_DIR}/tcp.c ${PICOCALC_NET_DIR}/ping.c ${SHELL}/src/core/ntp.c)
     target_include_directories(picocalc_net INTERFACE ${PICOCALC_NET_DIR} ${SHELL}/src/core)
     if (NOT PICOCALC_NET_OWN_LWIPOPTS)
         target_include_directories(picocalc_net INTERFACE ${PICOCALC_NET_DIR}/config)
+    endif()
+    if (PICOCALC_NET_CONNS)
+        target_compile_definitions(picocalc_net INTERFACE PICOCALC_NET_CONNS=${PICOCALC_NET_CONNS})
     endif()
     target_link_libraries(picocalc_net INTERFACE
         picocalc_fs pico_stdlib pico_cyw43_arch_lwip_threadsafe_background)
