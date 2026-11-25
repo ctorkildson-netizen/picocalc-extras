@@ -781,9 +781,24 @@ static void trace_mark(uint8_t t)
 	trace[n_trace++] = t;
 }
 
+/* Wi-Fi is joined: the radio is shared (one chip does both), so Bluetooth
+   keeps to what costs Wi-Fi little. Calling a classic device that isn't
+   there ties the radio up for seconds (the page timeout), long enough for
+   Wi-Fi to miss packets and a host's TCP to back off: keystrokes over telnet
+   or SSH then stall for seconds. So with Wi-Fi up, a classic device isn't
+   called; it reconnects itself when a key is pressed (the PicoCalc is always
+   connectable). And BLE listens less often (a slower reconnect, by a second
+   or so). */
+static bool wifi_up(void)
+{
+	return cyw43_wifi_link_status(&cyw43_state, CYW43_ITF_STA) == CYW43_LINK_JOIN;
+}
+static bool le_waiting_quietly;			/* the BLE listen was started with Wi-Fi up */
+
 static void try_paired(slot_t *s)
 {
 	if (!s->paired || s->le || s->cid || state != BTKBD_IDLE) return;
+	if (wifi_up()) return;				/* (see wifi_up()) */
 	/* A keyboard in boot mode: it goes straight to the keyboard connection,
 	   without first asking the keyboard for its layout -- which some
 	   keyboards (the K380, after pairing) don't answer, as Linux and others
@@ -811,6 +826,13 @@ static void on_retry(btstack_timer_source_t *t)
 		} else {
 			s->stuck = 0;
 		}
+	}
+	/* Wi-Fi came or went since BLE started listening: listen again at the
+	   pace that suits */
+	if (le_mode == LE_WAITING && le_waiting_quietly != wifi_up()) {
+		gap_stop_scan();
+		le_mode = LE_IDLE;
+		le_wait();
 	}
 	if (!trying && state == BTKBD_IDLE)
 		for (int k = 0; k < NSLOT; k++) {
@@ -912,7 +934,9 @@ static void le_wait(void)
 	}
 	if (!want) return;
 	memset(le_looked_up, 0, sizeof le_looked_up);
-	gap_set_scan_parameters(0, 0x0140, 0x0030);	/* passive: 30 ms in every 200 */
+	le_waiting_quietly = wifi_up();
+	if (le_waiting_quietly) gap_set_scan_parameters(0, 0x0800, 0x0030);	/* passive: 30 ms in every 1.28 s */
+	else gap_set_scan_parameters(0, 0x0140, 0x0030);			/* passive: 30 ms in every 200 */
 	gap_start_scan();
 	le_mode = LE_WAITING;
 }
