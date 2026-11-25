@@ -19,3 +19,12 @@
 [submodule "examples/ping/modules/picocalc-shell"]
 	path = examples/ping/modules/picocalc-shell
 	url = https://github.com/BlairLeduc/picocalc-shell.git
+[submodule "examples/sshprobe/modules/picocalc-text-starter"]
+	path = examples/sshprobe/modules/picocalc-text-starter
+	url = https://github.com/BlairLeduc/picocalc-text-starter
+[submodule "examples/sshprobe/modules/picocalc-shell"]
+	path = examples/sshprobe/modules/picocalc-shell
+	url = https://github.com/BlairLeduc/picocalc-shell.git
+[submodule "examples/sshprobe/modules/libssh2"]
+	path = examples/sshprobe/modules/libssh2
+	url = https://github.com/libssh2/libssh2.git

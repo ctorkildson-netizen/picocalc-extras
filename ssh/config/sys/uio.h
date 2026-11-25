@@ -1,0 +1,6 @@
+/* sys/uio.h for libssh2 on the PicoCalc (newlib has none) */
+#ifndef PICO_SYS_UIO_H
+#define PICO_SYS_UIO_H
+#include <stddef.h>
+struct iovec { void *iov_base; size_t iov_len; };
+#endif

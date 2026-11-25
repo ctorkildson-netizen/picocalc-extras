@@ -19,7 +19,8 @@ word processor.
 | [`picker/`](picker/) | A file picker: lists a folder, moves around the card, returns the file chosen, with an optional banner and preview panel |
 | [`bluetooth/`](bluetooth/) | A Bluetooth keyboard, mouse and gamepad for programs on a Pico 2 W, and **btpair**, which pairs them: the keyboard's keys come through the normal keyboard reads, so most programs need only one line |
 | [`images/`](images/) | JPEG, PNG and BMP decoders that fit a picture to a frame, plus a PC harness for testing them |
-| [`net/`](net/) | Wi-Fi from `/ntp/ntp.cfg`, a TCP connection, name lookups and ping, for programs on a Pico 2 W, with a ping program as its example |
+| [`net/`](net/) | Wi-Fi from `/ntp/ntp.cfg`, TCP connections (out, and in for a server), name lookups, ping and the time, for programs on a Pico 2 W, with a ping program as its example |
+| [`ssh/`](ssh/) | SSH for programs on a Pico 2 W: libssh2 with Mbed TLS over net/'s connections, with **sshprobe**, which logs in and runs a command, as its example |
 | [`fatfs/`](fatfs/) | The SD card's file system (ChaN's FatFs from the Pico SDK) built the way Blair Leduc's picocalc-text-starter wants it, as one CMake library |
 | [`HOWTO.md`](HOWTO.md) | How to use the picker and the decoders in your own program, with an example |
 
