@@ -1,13 +1,9 @@
-/* net.c -- Wi-Fi, a TCP connection and name lookups: see net.h.
- *
- * lwIP runs in the background (a low-priority interrupt), so data keeps
- * arriving while the program draws or moves a file; what comes in waits in
- * a 16 KB ring, and the TCP window is opened again only as the program
- * reads it, so a fast host is held back rather than anything being dropped.
- * Calls into lwIP from here are made inside cyw43_arch_lwip_begin/end.
+/* net.c -- Wi-Fi and name lookups: see net.h (TCP is in tcp.c, ping in
+ * ping.c).
  *
  * The network is joined at the first need and stays joined after a
- * hang-up, so connecting again is quick. From calcterm (MIT).
+ * hang-up, so connecting again is quick. Calls into lwIP are made inside
+ * cyw43_arch_lwip_begin/end. From calcterm (MIT).
  */
 #include <stdio.h>
 #include <string.h>
@@ -16,59 +12,16 @@
 #include "lwip/dns.h"
 #include "lwip/ip_addr.h"
 #include "lwip/netif.h"
-#include "lwip/tcp.h"
+#include "lwip/udp.h"
 #include "drivers/filesystem.h"
 #include "ntp.h"
 #include "net.h"
 
-#define RING 16384			/* a power of two, over TCP_WND */
-#define CONNECT_MS 15000
-
-static uint8_t ring[RING];
-static volatile uint32_t head, tail;	/* head: lwIP's; tail: ours */
-static uint32_t unacked;		/* read, not yet told to TCP */
-static struct tcp_pcb *volatile pcb;
-static volatile bool connected, host_closed;
-static volatile err_t failure;		/* from the error callback or the connect */
 static bool radio_on;
 static bool go_on(net_progress progress, const char *what, void *ctx) { return !progress || progress(what, ctx); }
 static char address[16];
 
 /* ------------------------------------------------------------ lwIP's side */
-
-static err_t on_recv(void *arg, struct tcp_pcb *p, struct pbuf *b, err_t err)
-{
-	(void)arg; (void)err;
-	if (!b) {				/* the host closed it */
-		host_closed = true;
-		return ERR_OK;
-	}
-	if (b->tot_len > RING - (head - tail)) return ERR_MEM;	/* (lwIP keeps it, and tries again) */
-	for (struct pbuf *q = b; q; q = q->next) {
-		const uint8_t *d = q->payload;
-		for (uint16_t i = 0; i < q->len; i++) ring[(head + i) & (RING - 1)] = d[i];
-		head += q->len;
-	}
-	(void)p;
-	pbuf_free(b);
-	return ERR_OK;
-}
-
-static void on_err(void *arg, err_t err)
-{
-	(void)arg;
-	pcb = NULL;				/* lwIP has freed it */
-	failure = err;
-	host_closed = true;
-}
-
-static err_t on_connected(void *arg, struct tcp_pcb *p, err_t err)
-{
-	(void)arg; (void)p;
-	if (err == ERR_OK) connected = true;
-	else failure = err;
-	return ERR_OK;
-}
 
 static volatile int dns_state;		/* 0 waiting, 1 found, -1 not */
 static ip_addr_t dns_ip;
@@ -188,115 +141,10 @@ bool net_lookup(const char *host, ip_addr_t *ip, net_progress progress, void *ct
 	return true;
 }
 
-bool net_connect(const char *host, uint16_t port, net_progress progress, void *ctx, char *why, size_t n)
-{
-	net_close();
-	if (!net_join(progress, ctx, why, n)) return false;
-
-	char msg[96];
-	ip_addr_t ip;
-	if (!net_lookup(host, &ip, progress, ctx, why, n)) return false;
-
-	head = tail = unacked = 0;
-	connected = host_closed = false;
-	failure = ERR_OK;
-	cyw43_arch_lwip_begin();
-	struct tcp_pcb *p = tcp_new_ip_type(IPADDR_TYPE_V4);
-	if (p) {
-		tcp_arg(p, NULL);
-		tcp_recv(p, on_recv);
-		tcp_err(p, on_err);
-		tcp_nagle_disable(p);		/* keys go as they're typed */
-		ip_set_option(p, SOF_KEEPALIVE);
-		pcb = p;
-		if (tcp_connect(p, &ip, port, on_connected) != ERR_OK) { tcp_abort(p); pcb = NULL; }
-	}
-	cyw43_arch_lwip_end();
-	if (!pcb) { snprintf(why, n, "Out of memory for a connection"); return false; }
-
-	snprintf(msg, sizeof msg, "Connecting to %.40s, port %u...", ipaddr_ntoa(&ip), port);
-	absolute_time_t until = make_timeout_time_ms(CONNECT_MS);
-	while (!connected && pcb && failure == ERR_OK && !time_reached(until)) {
-		if (!go_on(progress, msg, ctx)) { net_close(); snprintf(why, n, "Stopped."); return false; }
-		sleep_ms(20);
-	}
-	if (connected && pcb) return true;
-	err_t f = failure;
-	net_close();
-	if (f == ERR_RST) snprintf(why, n, "%.40s refused the connection (is anything listening on that port?)", host);
-	else snprintf(why, n, "No answer from %.40s, port %u", host, port);
-	return false;
-}
-
-void net_close(void)
-{
-	connected = false;
-	head = tail = unacked = 0;
-	if (!radio_on) return;			/* (nothing to close, and no lwIP to lock yet) */
-	cyw43_arch_lwip_begin();
-	struct tcp_pcb *p = pcb;
-	pcb = NULL;
-	if (p) {
-		tcp_arg(p, NULL);
-		tcp_recv(p, NULL);
-		tcp_err(p, NULL);
-		if (tcp_close(p) != ERR_OK) tcp_abort(p);
-	}
-	cyw43_arch_lwip_end();
-}
-
-bool net_open(void)
-{
-	return (connected && pcb && !host_closed) || head != tail;
-}
-
-bool net_closed_by_host(void)
-{
-	return connected && host_closed && head == tail;
-}
-
-size_t net_waiting(void)
-{
-	return head - tail;
-}
-
-size_t net_read(uint8_t *buf, size_t max)
-{
-	size_t k = 0;
-	uint32_t h = head;
-	while (k < max && tail != h) buf[k++] = ring[tail++ & (RING - 1)];
-	unacked += k;
-	if (radio_on && (unacked >= 512 || (unacked && head == tail))) {	/* open the window again */
-		cyw43_arch_lwip_begin();
-		if (pcb) tcp_recved(pcb, (u16_t)unacked);
-		cyw43_arch_lwip_end();
-		unacked = 0;
-	}
-	return k;
-}
-
-void net_write(const uint8_t *s, size_t n)
-{
-	absolute_time_t until = make_timeout_time_ms(10000);
-	while (n && pcb && !time_reached(until)) {
-		cyw43_arch_lwip_begin();
-		size_t m = 0;
-		if (pcb) {
-			size_t room = tcp_sndbuf(pcb);
-			m = n < room ? n : room;
-			if (m && tcp_write(pcb, s, (u16_t)m, TCP_WRITE_FLAG_COPY) != ERR_OK) m = 0;
-			tcp_output(pcb);
-		}
-		cyw43_arch_lwip_end();
-		if (m) { s += m; n -= m; until = make_timeout_time_ms(10000); }
-		else sleep_us(500);
-	}
-}
-
 void net_leave(void)
 {
 	if (!wifi_on) return;			/* (the radio may be on for Bluetooth alone) */
-	net_close();
+	net_close_all();
 	/* tell the router we've gone: without it, it keeps the PicoCalc's old
 	   connection for a minute or so, and turns away the next program that
 	   joins (the dots, then "retrying") until that runs out */
@@ -308,4 +156,63 @@ void net_leave(void)
 const char *net_address(void)
 {
 	return address;
+}
+
+/* ------------------------------------------------------------ the time (SNTP) */
+
+static volatile int64_t sntp_ms;	/* the answer, or 0 while waiting */
+static volatile bool sntp_got;
+
+static void on_sntp(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port)
+{
+	(void)arg; (void)pcb; (void)addr; (void)port;
+	uint8_t r[48];
+	if (p->tot_len >= 48 && pbuf_copy_partial(p, r, 48, 0) == 48) {
+		uint8_t mode = r[0] & 7, stratum = r[1];
+		uint32_t secs = (uint32_t)r[40] << 24 | (uint32_t)r[41] << 16 | (uint32_t)r[42] << 8 | r[43];
+		uint32_t frac = (uint32_t)r[44] << 24 | (uint32_t)r[45] << 16 | (uint32_t)r[46] << 8 | r[47];
+		/* a server's answer (mode 4), not a "kiss of death" (stratum 0), with a time */
+		if (mode == 4 && stratum != 0 && secs) {
+			/* NTP counts from 1900; 2,208,988,800 s to 1970. (Era 0 runs to 2036.) */
+			sntp_ms = ((int64_t)secs - 2208988800LL) * 1000 + (int64_t)(((uint64_t)frac * 1000) >> 32);
+			sntp_got = true;
+		}
+	}
+	pbuf_free(p);
+}
+
+bool net_time(int64_t *utc_ms, net_progress progress, void *ctx, char *why, size_t n)
+{
+	if (!net_join(progress, ctx, why, n)) return false;
+	const char *server = wc.server[0] ? wc.server : "pool.ntp.org";
+	ip_addr_t ip;
+	if (!net_lookup(server, &ip, progress, ctx, why, n)) return false;
+	char msg[80];
+	snprintf(msg, sizeof msg, "Asking %.50s the time...", server);
+	for (int attempt = 0; attempt < 3; attempt++) {
+		cyw43_arch_lwip_begin();
+		struct udp_pcb *pcb = udp_new_ip_type(IPADDR_TYPE_V4);
+		struct pbuf *p = pcb ? pbuf_alloc(PBUF_TRANSPORT, 48, PBUF_RAM) : NULL;
+		if (p) {
+			memset(p->payload, 0, 48);
+			((uint8_t *)p->payload)[0] = 0x23;	/* no leap warning, version 4, client */
+			sntp_got = false;
+			udp_recv(pcb, on_sntp, NULL);
+			udp_sendto(pcb, p, &ip, 123);
+			pbuf_free(p);
+		}
+		cyw43_arch_lwip_end();
+		if (!pcb) { snprintf(why, n, "Out of memory asking the time"); return false; }
+		absolute_time_t until = make_timeout_time_ms(3000);
+		while (!sntp_got && !time_reached(until)) {
+			if (progress && !progress(msg, ctx)) break;
+			sleep_ms(10);
+		}
+		cyw43_arch_lwip_begin();
+		udp_remove(pcb);
+		cyw43_arch_lwip_end();
+		if (sntp_got) { *utc_ms = sntp_ms; return true; }
+	}
+	snprintf(why, n, "No time from %.50s", server);
+	return false;
 }

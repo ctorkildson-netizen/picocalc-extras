@@ -14,7 +14,7 @@ word processor.
 | Piece | What it is |
 |---|---|
 | [`picocalc_clock.h`](picocalc_clock.h) | The shell's clock (shell v1.1), for programs written for the earlier shared clock here |
-| [`screenshot/`](screenshot/) | Shift+F5 screenshots (BMP) for PDCurses programs on the PicoCalc |
+| [`screenshot/`](screenshot/) | Shift+F5 screenshots (BMP): of any program on the text starter's drivers (`lcdshot.c`), or of a PDCurses program (`pdcshot.c`) |
 | [`nes/`](nes/) | A ready-made build of the ShapoNES NES emulator for the PicoCalc |
 | [`picker/`](picker/) | A file picker: lists a folder, moves around the card, returns the file chosen, with an optional banner and preview panel |
 | [`bluetooth/`](bluetooth/) | A Bluetooth keyboard, mouse and gamepad for programs on a Pico 2 W, and **btpair**, which pairs them: the keyboard's keys come through the normal keyboard reads, so most programs need only one line |
