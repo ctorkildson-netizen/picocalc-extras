@@ -4,7 +4,8 @@
  *
  * The LCD's frame memory is read back a row at a time and written as a
  * 320x320 24-bit BMP to /screenshots on the SD card, named after the program
- * and, when the shell's clock is set, the date and time:
+ * and, when the program has picocalc-shell and its clock is set, the date
+ * and time:
  * /screenshots/ftp-2026-11-23_114502.bmp (or ftp-001.bmp without a clock).
  * MIT, like the rest of picocalc-extras.
  */
@@ -12,7 +13,11 @@
 #include <string.h>
 #include "ff.h"
 #include "drivers/lcd.h"
-#include "picocalc_shell.h"
+
+/* The shell's clock, for the date in the file's name -- if the program has
+   Blair Leduc's picocalc-shell at all. Declared weak, so a program without
+   it (an RP2040 build, say) links anyway, and its screenshots are numbered. */
+bool picocalc_shell_time(int64_t *utc_ms, int *offset_min) __attribute__((weak));
 #include "lcdshot.h"
 
 #define W 320
@@ -34,7 +39,7 @@ static bool name_for(const char *app, char *out, size_t n)
 {
 	int64_t utc_ms;
 	int offset_min;
-	if (picocalc_shell_time(&utc_ms, &offset_min)) {
+	if (picocalc_shell_time && picocalc_shell_time(&utc_ms, &offset_min)) {
 		int64_t s = utc_ms / 1000 + (int64_t)offset_min * 60;
 		int64_t days = s / 86400, sod = s % 86400;
 		/* days since 1970-01-01 to a date (Howard Hinnant's civil_from_days) */

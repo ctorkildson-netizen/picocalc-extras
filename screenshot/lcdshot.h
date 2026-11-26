@@ -6,7 +6,9 @@
  *         lcd_screenshot("myprog", saved, sizeof saved);
  *
  * Writes a 320x320 BMP to /screenshots (made if need be): myprog-<date and
- * time>.bmp when the shell's clock is set, else myprog-001.bmp and on.
+ * time>.bmp when the program has picocalc-shell and its clock is set, else
+ * myprog-001.bmp and on. Works on an RP2040 or RP2350, with or without the
+ * shell; it needs FatFs (fatfs/) and the text starter's LCD driver.
  * true, with the file's path in saved (if given), when it's written.
  *
  * Call it from the program's own loop, not from an interrupt: it reads the

@@ -86,10 +86,11 @@ read the LCD back with `lcd_unblit()`), curses or not.
 
 ## Using it in a program
 
-1. Add `screenshot/lcdshot.c` to the program's sources, and put
-   `screenshot/` and the shell's `include/` (`picocalc_shell.h`, v1.1 or
-   later, for the clock) on its include path. It needs `picocalc_fs`
-   (`fatfs/`), and `hardware_powman` for the clock.
+1. Add `screenshot/lcdshot.c` to the program's sources and put
+   `screenshot/` on its include path. It needs `picocalc_fs` (`fatfs/`).
+   That's all, on an RP2040 or an RP2350. A program that also has Blair's
+   picocalc-shell (v1.1 or later) gets dated file names from its clock;
+   one without gets numbered ones.
 2. Call it from the program's own loop when Shift+F5 comes in (the
    keyboard BIOS sends it as F10):
 
@@ -102,7 +103,8 @@ read the LCD back with `lcd_unblit()`), curses or not.
    ```
 
 Files are 320x320 24-bit BMPs in `/screenshots`, named by date and time
-when the shell's clock is set, otherwise `myprog-001.bmp` and on. It reads
+when the program has the shell and its clock is set, otherwise
+`myprog-001.bmp` and on. It reads
 the LCD a row at a time, so it takes a second or so; don't call it from an
 interrupt.
 
